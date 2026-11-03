@@ -1,0 +1,29 @@
+name: Test
+
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  build-and-test:
+    name: Build And Test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Install the Rust toolchain
+        uses: actions-rust-lang/setup-rust-toolchain@ecabd13d1c56bd1345c230e542e9144811ad706f # 2.0.0
+        with:
+          components: rustfmt clippy
+      - name: Build
+        run: cargo build --verbose
+      - name: Enforce formatting
+        run: cargo fmt --check
+      - name: Run Clippy linter
+        run: cargo clippy -- -D warnings
+      - name: Run tests
+        run: cargo test --verbose

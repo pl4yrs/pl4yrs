@@ -9,8 +9,8 @@ use tracing::{debug, info};
 use tracing_subscriber::prelude::*;
 
 const DEFAULT_HTTP_PORT: u16 = 4243;
-const DEFAULT_SENDSPIN_CONFIG_FILE: &'static str = "/etc/sendspin-cli.conf";
-const DEFAULT_SENDSPIN_SOCK: &'static str = "/var/run/sendspin-cli/control.sock";
+const DEFAULT_SENDSPIN_CONFIG_FILE: &str = "/etc/sendspin-cli.conf";
+const DEFAULT_SENDSPIN_SOCK: &str = "/var/run/sendspin-cli/control.sock";
 
 #[derive(Parser, Debug)]
 #[command(
