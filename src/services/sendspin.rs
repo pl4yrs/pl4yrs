@@ -66,8 +66,8 @@ pub struct SendSpinService {
 impl SendSpinService {
     pub fn new(socket_path: PathBuf, config_file: PathBuf) -> Self {
         Self {
-            socket_path: socket_path,
-            config_file: config_file,
+            socket_path,
+            config_file,
         }
     }
 
@@ -99,7 +99,7 @@ impl SendSpinService {
 
         for line in lines
             .map_while(Result::ok)
-            .filter(|x| !x.starts_with('#') && x != "")
+            .filter(|x| !x.starts_with('#') && !x.is_empty())
         {
             debug!(line = line, "processing config line");
             if let Some((key, value)) = line.split_once("=") {
