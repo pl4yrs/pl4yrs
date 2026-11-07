@@ -4,11 +4,17 @@ use std::fs::File;
 use std::io::{self, BufRead};
 use std::path::Path;
 use std::path::PathBuf;
+use std::sync::Arc;
+use std::time::Duration;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::UnixStream;
-use tracing::{debug, error};
+use tokio::sync::watch;
+use tracing::{debug, error, warn};
+use valuable::Valuable;
 
-#[derive(Debug, Clone, Serialize)]
+const SENDSPIN_STATUS_POLL_INTERVAL_MS: u64 = 200;
+
+#[derive(Debug, Clone, Serialize, PartialEq)]
 pub struct SendSpinStatus {
     pub name: String,
     pub client_id: String,
@@ -18,7 +24,7 @@ pub struct SendSpinStatus {
     pub state: PlaybackState,
     pub stream: String,
     pub track: String,
-    pub position: Option<u64>,
+    pub position: Option<Position>,
     pub group_volume: Option<u8>,
     pub repeat: Option<bool>,
     pub shuffle: Option<bool>,
@@ -49,7 +55,14 @@ pub struct SendSpinConfig {
     control_socket: String,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Serialize)]
+#[derive(Debug, Clone, Serialize, PartialEq)]
+pub struct Position {
+    pub position: Duration,
+    pub duration: Option<Duration>,
+    pub estimated: bool,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Valuable)]
 pub enum PlaybackState {
     Unknown,
     Playing,
@@ -61,18 +74,45 @@ pub enum PlaybackState {
 pub struct SendSpinService {
     socket_path: PathBuf,
     config_file: PathBuf,
+    pub status_rx: watch::Receiver<SendSpinStatus>,
+    status_tx: Arc<watch::Sender<SendSpinStatus>>,
 }
 
 impl SendSpinService {
     pub fn new(socket_path: PathBuf, config_file: PathBuf) -> Self {
+        let (status_tx, status_rx) = watch::channel(SendSpinStatus::default());
         Self {
             socket_path,
             config_file,
+            status_rx,
+            status_tx: Arc::new(status_tx),
         }
     }
 
-    pub async fn get_status(&self) -> Result<SendSpinStatus, SendSpinError> {
-        let mut stream = UnixStream::connect(&self.socket_path)
+    pub fn start_polling(&self) {
+        let socket_path = self.socket_path.clone();
+        let tx = self.status_tx.clone();
+
+        tokio::spawn(async move {
+            let mut ticker =
+                tokio::time::interval(Duration::from_millis(SENDSPIN_STATUS_POLL_INTERVAL_MS));
+            loop {
+                ticker.tick().await;
+                match Self::fetch_status(&socket_path).await {
+                    Ok(status) => {
+                        if *tx.borrow() != status {
+                            debug!(status = ?status, "Got new status response");
+                            let _ = tx.send(status);
+                        }
+                    }
+                    Err(e) => warn!("sendspin poll failed: {e}"),
+                }
+            }
+        });
+    }
+
+    async fn fetch_status(socket_path: &Path) -> Result<SendSpinStatus, SendSpinError> {
+        let mut stream = UnixStream::connect(socket_path)
             .await
             .map_err(SendSpinError::Connect)?;
 
@@ -80,9 +120,12 @@ impl SendSpinService {
 
         let mut response = String::new();
         stream.read_to_string(&mut response).await?;
-        debug!(response, "Got Status response");
 
-        self.parse_status_response(&response)
+        Self::parse_status_response(&response)
+    }
+
+    pub fn status(&self) -> SendSpinStatus {
+        self.status_rx.borrow().clone()
     }
 
     pub async fn get_config(&self) -> Result<SendSpinConfig, SendSpinError> {
@@ -129,7 +172,7 @@ impl SendSpinService {
         Ok(config)
     }
 
-    fn parse_status_response(&self, response: &str) -> Result<SendSpinStatus, SendSpinError> {
+    fn parse_status_response(response: &str) -> Result<SendSpinStatus, SendSpinError> {
         let mut status = SendSpinStatus::default();
         let lines: Vec<&str> = response.lines().collect();
 
@@ -144,10 +187,18 @@ impl SendSpinService {
                     "state" => status.state = Self::parse_state(value),
                     "stream" => status.stream = value.to_string(),
                     "track" => status.track = value.to_string(),
-                    "position" => status.position = Self::parse_optional_u64(value),
+                    "position" => {
+                        status.position = Self::parse_optional_position(value).map(
+                            |(position, duration, estimated)| Position {
+                                position,
+                                duration,
+                                estimated,
+                            },
+                        )
+                    }
                     "group volume" => status.group_volume = Self::parse_optional_u8(value),
-                    "repeat" => status.repeat = Self::parse_optional_bool(value),
-                    "shuffle" => status.shuffle = Self::parse_optional_bool(value),
+                    "repeat" => status.repeat = Self::parse_optional_toggle(value),
+                    "shuffle" => status.shuffle = Self::parse_optional_toggle(value),
                     "player volume" => status.player_volume = Self::parse_volume(value),
                     "output" => status.output = value.to_string(),
                     "output delay" => status.output_delay_ms = Self::parse_delay(value),
@@ -171,11 +222,43 @@ impl SendSpinService {
         }
     }
 
-    fn parse_optional_u64(value: &str) -> Option<u64> {
-        if value == "unknown" {
-            None
-        } else {
-            value.parse().ok()
+    fn parse_optional_position(value: &str) -> Option<(Duration, Option<Duration>, bool)> {
+        let (times, estimated) = match value.strip_suffix(" (estimated)") {
+            Some(t) => (t, true),
+            None => (value, false),
+        };
+        let (pos, dur) = times.split_once(" / ")?;
+        let position = Self::parse_clock(pos)?;
+        let duration = match dur {
+            "unknown" => None,
+            d => Self::parse_clock(d).filter(|d| !d.is_zero()),
+        };
+        Some((position, duration, estimated))
+    }
+
+    fn parse_clock(value: &str) -> Option<Duration> {
+        let mut total = Duration::ZERO;
+        for (unit, part) in value.trim().rsplit(':').enumerate() {
+            let n: u64 = part.parse().ok()?;
+            total += match unit {
+                0 => Duration::from_secs(n),
+                1 => Duration::from_mins(n),
+                2 => Duration::from_hours(n),
+                _ => return None,
+            };
+        }
+        Some(total)
+    }
+
+    fn parse_optional_toggle(value: &str) -> Option<bool> {
+        match value {
+            "on" => Some(true),
+            "off" => Some(false),
+            "unknown" => None,
+            _ => {
+                warn!(value, "Invalid value for a toggle");
+                None
+            }
         }
     }
 
