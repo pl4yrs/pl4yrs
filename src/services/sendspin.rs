@@ -4,11 +4,17 @@ use std::fs::File;
 use std::io::{self, BufRead};
 use std::path::Path;
 use std::path::PathBuf;
+use std::sync::Arc;
+use std::time::Duration;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::UnixStream;
-use tracing::{debug, error};
+use tokio::sync::watch;
+use tracing::{debug, error, warn};
+use valuable::Valuable;
 
-#[derive(Debug, Clone, Serialize)]
+const SENDSPIN_STATUS_POLL_INTERVAL_MS: u64 = 200;
+
+#[derive(Debug, Clone, Serialize, PartialEq, Valuable)]
 pub struct SendSpinStatus {
     pub name: String,
     pub client_id: String,
@@ -49,7 +55,7 @@ pub struct SendSpinConfig {
     control_socket: String,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Serialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Valuable)]
 pub enum PlaybackState {
     Unknown,
     Playing,
@@ -61,18 +67,45 @@ pub enum PlaybackState {
 pub struct SendSpinService {
     socket_path: PathBuf,
     config_file: PathBuf,
+    pub status_rx: watch::Receiver<SendSpinStatus>,
+    status_tx: Arc<watch::Sender<SendSpinStatus>>,
 }
 
 impl SendSpinService {
     pub fn new(socket_path: PathBuf, config_file: PathBuf) -> Self {
+        let (status_tx, status_rx) = watch::channel(SendSpinStatus::default());
         Self {
             socket_path,
             config_file,
+            status_rx,
+            status_tx: Arc::new(status_tx),
         }
     }
 
-    pub async fn get_status(&self) -> Result<SendSpinStatus, SendSpinError> {
-        let mut stream = UnixStream::connect(&self.socket_path)
+    pub fn start_polling(&self) {
+        let socket_path = self.socket_path.clone();
+        let tx = self.status_tx.clone();
+
+        tokio::spawn(async move {
+            let mut ticker =
+                tokio::time::interval(Duration::from_millis(SENDSPIN_STATUS_POLL_INTERVAL_MS));
+            loop {
+                ticker.tick().await;
+                match Self::fetch_status(&socket_path).await {
+                    Ok(status) => {
+                        if *tx.borrow() != status {
+                            debug!(status = ?status, "Got new status response");
+                            let _ = tx.send(status);
+                        }
+                    }
+                    Err(e) => warn!("sendspin poll failed: {e}"),
+                }
+            }
+        });
+    }
+
+    async fn fetch_status(socket_path: &Path) -> Result<SendSpinStatus, SendSpinError> {
+        let mut stream = UnixStream::connect(socket_path)
             .await
             .map_err(SendSpinError::Connect)?;
 
@@ -80,9 +113,12 @@ impl SendSpinService {
 
         let mut response = String::new();
         stream.read_to_string(&mut response).await?;
-        debug!(response, "Got Status response");
 
-        self.parse_status_response(&response)
+        Self::parse_status_response(&response)
+    }
+
+    pub fn status(&self) -> SendSpinStatus {
+        self.status_rx.borrow().clone()
     }
 
     pub async fn get_config(&self) -> Result<SendSpinConfig, SendSpinError> {
@@ -129,7 +165,7 @@ impl SendSpinService {
         Ok(config)
     }
 
-    fn parse_status_response(&self, response: &str) -> Result<SendSpinStatus, SendSpinError> {
+    fn parse_status_response(response: &str) -> Result<SendSpinStatus, SendSpinError> {
         let mut status = SendSpinStatus::default();
         let lines: Vec<&str> = response.lines().collect();
 

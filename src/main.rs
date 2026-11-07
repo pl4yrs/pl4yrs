@@ -48,6 +48,7 @@ pub async fn main() -> Result<()> {
         args.sendspin_sock.unwrap(),
         args.sendspin_config_file.unwrap(),
     );
+    state.sendspin_service.start_polling();
     run_app(state, args.port).await?;
     Ok(())
 }
