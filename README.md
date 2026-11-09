@@ -1,4 +1,5 @@
-# Pl4yrs Backend
+# Pl4yrs workspace
 
-This is the backend and configuration service for Pl4yrs.
-It's currently in very early stage, which means contributions and issues are discouraged until further notice.
+This is the monorepo containing the different components for the Pl4yrs stack:
+
+* `pl4yrs-backend` - The backend API for controlling the device configuration and status
