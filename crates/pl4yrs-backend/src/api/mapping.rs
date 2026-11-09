@@ -3,16 +3,17 @@ use pl4yrs_api::playback::{MediaItem, PlaybackSource, PlayerState, PlayerStatus,
 
 impl From<&SendSpinStatus> for PlayerStatus {
     fn from(status: &SendSpinStatus) -> Self {
-        let mut player_status = PlayerStatus::default();
-        player_status.source = Some(PlaybackSource::Sendspin {
-            server: status.server.clone(),
-        });
-
-        player_status.state = match status.state {
-            PlaybackState::Unknown => PlayerState::Unknown,
-            PlaybackState::Playing => PlayerState::Playing,
-            PlaybackState::Paused => PlayerState::Paused,
-            PlaybackState::Stopped => PlayerState::Stopped,
+        let mut player_status = pl4yrs_api::playback::PlayerStatus {
+            source: Some(PlaybackSource::Sendspin {
+                server: status.server.clone(),
+            }),
+            state: match status.state {
+                PlaybackState::Unknown => PlayerState::Unknown,
+                PlaybackState::Playing => PlayerState::Playing,
+                PlaybackState::Paused => PlayerState::Paused,
+                PlaybackState::Stopped => PlayerState::Stopped,
+            },
+            ..Default::default()
         };
 
         if let Some(ref position) = status.position {

@@ -27,7 +27,7 @@ pub enum PlaybackSource {
     LocalFile,
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Default, Serialize, Deserialize)]
 pub struct MediaItem {
     pub title: String,
     pub artist: Option<String>,
@@ -50,18 +50,6 @@ impl Default for PlayerStatus {
             source: None,
             media: None,
             progress: None,
-        }
-    }
-}
-
-impl Default for MediaItem {
-    fn default() -> Self {
-        MediaItem {
-            title: String::new(),
-            artist: None,
-            album: None,
-            duration: None,
-            artwork_url: None,
         }
     }
 }
