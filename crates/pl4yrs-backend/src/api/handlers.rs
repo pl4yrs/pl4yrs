@@ -21,12 +21,14 @@ pub async fn status_events(
 
     let stream = async_stream::stream! {
         let status = rx.borrow_and_update().clone();
-        yield Ok(Event::default().json_data(status).unwrap());
+        let response = PlayerStatus::from(&status);
+        yield Ok(Event::default().json_data(response).unwrap());
 
         loop {
             if rx.changed().await.is_err() { break; }
             let status = rx.borrow_and_update().clone();
-            yield Ok(Event::default().json_data(status).unwrap());
+            let response = PlayerStatus::from(&status);
+            yield Ok(Event::default().json_data(response).unwrap());
         }
     };
     Sse::new(stream).keep_alive(KeepAlive::new().interval(Duration::from_secs(15)))
