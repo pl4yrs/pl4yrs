@@ -1,0 +1,4 @@
+# See https://github.com/knu/apt-bundle for details on the file format
+
+# To link against the alsa library
+package librust-alsa-dev
