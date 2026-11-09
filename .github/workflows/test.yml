@@ -19,12 +19,12 @@ jobs:
         uses: actions-rust-lang/setup-rust-toolchain@ecabd13d1c56bd1345c230e542e9144811ad706f # 2.0.0
         with:
           components: rustfmt clippy
-      - name: Install build dependencies
-        uses: knu/apt-bundle@e2785799997e987b92cfe5d73e325991d4eb2dcd # 1.4.2
-      - name: Enforce formatting
+      - name: Check formatting
         run: cargo fmt --check
       - name: Run Clippy linter
         run: cargo clippy -- -D warnings
+      - name: Install build dependencies
+        uses: knu/apt-bundle@e2785799997e987b92cfe5d73e325991d4eb2dcd # 1.4.2
       - name: Build
         run: cargo build --verbose
       - name: Run tests
