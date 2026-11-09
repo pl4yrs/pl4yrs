@@ -3,15 +3,13 @@ use crate::api::state;
 use axum::response::sse::{Event, KeepAlive, Sse};
 use axum::{extract::State, response::Json};
 use futures_core::Stream;
+use pl4yrs_api::playback::PlayerStatus;
 use serde_json::{Value, json};
 use std::convert::Infallible;
 use std::time::Duration;
 use tracing::debug;
-use pl4yrs_api::playback::PlayerStatus;
 
-pub async fn status(
-    State(s): State<state::AppState>,
-) -> Json<PlayerStatus> {
+pub async fn status(State(s): State<state::AppState>) -> Json<PlayerStatus> {
     let status = s.sendspin_service.status();
     Json(PlayerStatus::from(&status))
 }
