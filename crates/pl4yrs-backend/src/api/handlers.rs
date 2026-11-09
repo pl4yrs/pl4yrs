@@ -3,15 +3,15 @@ use crate::api::state;
 use axum::response::sse::{Event, KeepAlive, Sse};
 use axum::{extract::State, response::Json};
 use futures_core::Stream;
+use pl4yrs_api::playback::PlayerStatus;
 use serde_json::{Value, json};
 use std::convert::Infallible;
 use std::time::Duration;
 use tracing::debug;
 
-pub async fn status(
-    State(s): State<state::AppState>,
-) -> Json<crate::services::sendspin::SendSpinStatus> {
-    Json(s.sendspin_service.status())
+pub async fn status(State(s): State<state::AppState>) -> Json<PlayerStatus> {
+    let status = s.sendspin_service.status();
+    Json(PlayerStatus::from(&status))
 }
 
 pub async fn status_events(
@@ -21,12 +21,14 @@ pub async fn status_events(
 
     let stream = async_stream::stream! {
         let status = rx.borrow_and_update().clone();
-        yield Ok(Event::default().json_data(status).unwrap());
+        let response = PlayerStatus::from(&status);
+        yield Ok(Event::default().json_data(response).unwrap());
 
         loop {
             if rx.changed().await.is_err() { break; }
             let status = rx.borrow_and_update().clone();
-            yield Ok(Event::default().json_data(status).unwrap());
+            let response = PlayerStatus::from(&status);
+            yield Ok(Event::default().json_data(response).unwrap());
         }
     };
     Sse::new(stream).keep_alive(KeepAlive::new().interval(Duration::from_secs(15)))
