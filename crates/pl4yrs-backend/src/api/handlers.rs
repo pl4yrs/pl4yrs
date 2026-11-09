@@ -7,11 +7,13 @@ use serde_json::{Value, json};
 use std::convert::Infallible;
 use std::time::Duration;
 use tracing::debug;
+use pl4yrs_api::playback::PlayerStatus;
 
 pub async fn status(
     State(s): State<state::AppState>,
-) -> Json<crate::services::sendspin::SendSpinStatus> {
-    Json(s.sendspin_service.status())
+) -> Json<PlayerStatus> {
+    let status = s.sendspin_service.status();
+    Json(PlayerStatus::from(&status))
 }
 
 pub async fn status_events(
