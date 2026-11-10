@@ -4,3 +4,11 @@ members = ["crates/*"]
 
 [workspace.dependencies]
 pl4yrs-api = { path = "crates/pl4yrs-api" }
+
+[profile.release]
+lto = true
+
+[profile.release.package.pl4yrs-tui]
+codegen-units = 1
+opt-level = "s"
+strip = true

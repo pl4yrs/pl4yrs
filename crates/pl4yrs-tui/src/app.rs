@@ -1,6 +1,12 @@
-use crate::event::{AppEvent, Event, EventHandler};
+use crate::{
+    event::{AppEvent, Event, EventHandler},
+    pl4yrs_client::{BackendCommand, BackendEvent, Pl4yrsClient},
+};
+use anyhow::{Error, Result};
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
+use pl4yrs_api::playback::PlayerStatus;
 use ratatui::DefaultTerminal;
+use tokio::sync::mpsc::error::TrySendError;
 
 /// Application.
 #[derive(Debug)]
@@ -11,22 +17,25 @@ pub struct App {
     pub counter: u8,
     /// Event handler.
     pub events: EventHandler,
-}
 
-impl Default for App {
-    fn default() -> Self {
-        Self {
-            running: true,
-            counter: 0,
-            events: EventHandler::new(),
-        }
-    }
+    pub client: Pl4yrsClient,
+    pub status: Option<PlayerStatus>,
+    pub last_error: Option<String>,
 }
 
 impl App {
-    /// Constructs a new instance of [`App`].
-    pub fn new() -> Self {
-        Self::default()
+    pub fn new(base_url: reqwest::Url) -> Result<App, Error> {
+        let events = EventHandler::new();
+        let pl4yrs_client = Pl4yrsClient::start(base_url, events.sender())?;
+
+        Ok(App {
+            running: true,
+            counter: 0,
+            events: events,
+            client: pl4yrs_client,
+            status: None,
+            last_error: None,
+        })
     }
 
     /// Run the application's main loop.
@@ -46,7 +55,15 @@ impl App {
                 Event::App(app_event) => match app_event {
                     AppEvent::Increment => self.increment_counter(),
                     AppEvent::Decrement => self.decrement_counter(),
+                    AppEvent::FetchStatus => self.fetch_status(),
                     AppEvent::Quit => self.quit(),
+                },
+                Event::Backend(backend_event) => match backend_event {
+                    BackendEvent::Connecting => self.backend_connecting(),
+                    BackendEvent::Connected => self.backend_connected(),
+                    BackendEvent::Disconnected(message) => self.backend_disconnected(message),
+                    BackendEvent::RequestFailed(message) => self.backend_failed(message),
+                    BackendEvent::StatusReceived(status) => self.backend_update_status(status),
                 },
             }
         }
@@ -62,7 +79,7 @@ impl App {
             }
             KeyCode::Right => self.events.send(AppEvent::Increment),
             KeyCode::Left => self.events.send(AppEvent::Decrement),
-            // Other handlers you could add here.
+            KeyCode::Char('s' | 'S') => self.events.send(AppEvent::FetchStatus),
             _ => {}
         }
         Ok(())
@@ -85,5 +102,33 @@ impl App {
 
     pub fn decrement_counter(&mut self) {
         self.counter = self.counter.saturating_sub(1);
+    }
+
+    pub fn fetch_status(&mut self) {
+        match self.client.try_send(BackendCommand::FetchStatus) {
+            Ok(()) => {}
+            Err(TrySendError::Full(_)) => {
+                self.last_error =
+                    Some("Too many pending requests; please try again shortly.".to_owned());
+            }
+            Err(TrySendError::Closed(_)) => {
+                self.last_error = Some("The backend command worker is unavailable.".to_owned());
+            }
+        }
+    }
+
+    pub fn backend_connecting(&mut self) {}
+
+    pub fn backend_connected(&mut self) {}
+
+    pub fn backend_disconnected(&mut self, _message: String) {}
+
+    pub fn backend_failed(&mut self, message: String) {
+        self.last_error = Some(message);
+    }
+
+    pub fn backend_update_status(&mut self, status: PlayerStatus) {
+        self.status = Some(status);
+        self.last_error = None;
     }
 }
