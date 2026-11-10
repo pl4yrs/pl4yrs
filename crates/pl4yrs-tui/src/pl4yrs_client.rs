@@ -87,7 +87,6 @@ async fn run_sse_worker(
     _base_url: reqwest::Url,
     _event_tx: UnboundedSender<Event>,
 ) {
-    ()
 }
 
 pub async fn fetch_status(http: &reqwest::Client, base_url: &reqwest::Url) -> Result<PlayerStatus> {

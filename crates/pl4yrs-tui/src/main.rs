@@ -7,7 +7,7 @@ pub mod event;
 pub mod pl4yrs_client;
 pub mod ui;
 
-const DEFAULT_PL4YRS_SERVER_URL: &'static str = "http://localhost:4243";
+const DEFAULT_PL4YRS_SERVER_URL: &str = "http://localhost:4243";
 
 #[derive(Parser, Debug)]
 #[command(version, about = "Pl4yrs TUI client")]

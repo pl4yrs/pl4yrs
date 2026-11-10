@@ -31,7 +31,7 @@ impl App {
         Ok(App {
             running: true,
             counter: 0,
-            events: events,
+            events,
             client: pl4yrs_client,
             status: None,
             last_error: None,
