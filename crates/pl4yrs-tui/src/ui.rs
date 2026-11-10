@@ -6,6 +6,7 @@ use ratatui::{
 };
 
 use crate::app::App;
+use crate::widgets::PlayerStatusWidget;
 
 impl Widget for &App {
     /// Renders the user interface widgets.
@@ -39,14 +40,7 @@ impl Widget for &App {
 
         paragraph.render(help_area, buf);
 
-        let title = self
-            .status
-            .as_ref()
-            .and_then(|status| status.media.as_ref())
-            .map(|media| media.title.as_str())
-            .unwrap_or("No media information");
-
-        title.render(player_area, buf);
+        PlayerStatusWidget::new(self.status.as_ref()).render(player_area, buf);
 
         let footer_text = match (&self.last_error, &self.status) {
             (Some(error), _) => format!("Server error: {error}"),

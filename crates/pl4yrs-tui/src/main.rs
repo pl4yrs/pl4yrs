@@ -6,6 +6,7 @@ pub mod app;
 pub mod event;
 pub mod pl4yrs_client;
 pub mod ui;
+pub mod widgets;
 
 const DEFAULT_PL4YRS_SERVER_URL: &str = "http://localhost:4243";
 
