@@ -4,6 +4,8 @@ use futures::{FutureExt, StreamExt};
 use std::time::Duration;
 use tokio::sync::mpsc;
 
+use crate::pl4yrs_client::BackendEvent;
+
 /// The frequency at which tick events are emitted.
 const TICK_FPS: f64 = 30.0;
 
@@ -24,6 +26,9 @@ pub enum Event {
     ///
     /// Use this event to emit custom events that are specific to your application.
     App(AppEvent),
+
+    /// Pl4yrs Backend Events
+    Backend(BackendEvent),
 }
 
 /// Application events.
@@ -31,12 +36,10 @@ pub enum Event {
 /// You can extend this enum with your own custom events.
 #[derive(Clone, Debug)]
 pub enum AppEvent {
-    /// Increment the counter.
-    Increment,
-    /// Decrement the counter.
-    Decrement,
     /// Quit the application.
     Quit,
+    /// Fetch backend status.
+    FetchStatus,
 }
 
 /// Terminal event handler.
@@ -87,6 +90,10 @@ impl EventHandler {
         // Ignore the result as the reciever cannot be dropped while this struct still has a
         // reference to it
         let _ = self.sender.send(Event::App(app_event));
+    }
+
+    pub fn sender(&self) -> mpsc::UnboundedSender<Event> {
+        self.sender.clone()
     }
 }
 
