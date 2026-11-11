@@ -199,6 +199,21 @@ fn render_detailed(status: &PlayerStatus, area: Rect, buf: &mut Buffer) {
         .filter(|title| !title.is_empty())
         .unwrap_or("No media information");
 
+    let title_height: u16 = if title.len() > usize::from(media_area.width) {
+        2
+    } else {
+        1
+    };
+
+    let [state_area, title_area, artist_area, album_area, _rest] = Layout::vertical([
+        Constraint::Length(1),
+        Constraint::Length(title_height),
+        Constraint::Length(1),
+        Constraint::Length(1),
+        Constraint::Min(0),
+    ])
+    .areas(media_area);
+
     let artist = media
         .and_then(|media| media.artist.as_deref())
         .filter(|artist| !artist.is_empty())
@@ -215,19 +230,23 @@ fn render_detailed(status: &PlayerStatus, area: Rect, buf: &mut Buffer) {
         _ => Color::Gray,
     };
 
-    let media_lines = vec![
-        Line::from(Span::styled(
-            state_label(&status.state),
-            Style::default().fg(state_color),
-        )),
-        Line::from(Span::styled(title, Style::default().bold())),
-        Line::from(artist),
-        Line::from(Span::styled(album, Style::default().fg(Color::DarkGray))),
-    ];
+    Paragraph::new(Line::from(Span::styled(
+        state_label(&status.state),
+        Style::default().fg(state_color),
+    )))
+    .render(state_area, buf);
 
-    Paragraph::new(media_lines)
+    Paragraph::new(Line::from(Span::styled(title, Style::default().bold())))
         .wrap(Wrap { trim: true })
-        .render(media_area, buf);
+        .render(title_area, buf);
+
+    Paragraph::new(Line::from(artist)).render(artist_area, buf);
+
+    Paragraph::new(Line::from(Span::styled(
+        album,
+        Style::default().fg(Color::DarkGray),
+    )))
+    .render(album_area, buf);
 
     let (source_name, server) = match status.source.as_ref() {
         Some(PlaybackSource::Sendspin { server }) => ("SendSpin", Some(server.as_str())),
