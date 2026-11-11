@@ -143,6 +143,22 @@ async fn receive_status_events(
         .await?
         .error_for_status()?;
 
+    let content_type = response
+        .headers()
+        .get(reqwest::header::CONTENT_TYPE)
+        .and_then(|v| v.to_str().ok());
+
+    let is_sse = content_type
+        .map(|v| v.starts_with("text/event-stream"))
+        .unwrap_or(false);
+
+    if !is_sse {
+        anyhow::bail!(
+            "expected text/event-stream, got {}",
+            content_type.unwrap_or("<none>")
+        );
+    }
+
     if event_tx
         .send(Event::Backend(BackendEvent::Connected))
         .is_err()
