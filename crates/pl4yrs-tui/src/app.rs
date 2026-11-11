@@ -59,7 +59,6 @@ impl App {
                     _ => {}
                 },
                 Event::App(app_event) => match app_event {
-                    AppEvent::FetchStatus => self.fetch_status(),
                     AppEvent::Quit => self.quit(),
                 },
                 Event::Backend(backend_event) => match backend_event {
@@ -84,7 +83,6 @@ impl App {
             KeyCode::Char('c' | 'C') if key_event.modifiers == KeyModifiers::CONTROL => {
                 self.events.send(AppEvent::Quit)
             }
-            KeyCode::Char('s' | 'S') => self.events.send(AppEvent::FetchStatus),
             _ => {}
         }
         Ok(())

@@ -32,8 +32,7 @@ impl Widget for &App {
             .border_type(BorderType::Rounded);
 
         let text = "Welcome to Pl4yrs.\n\
-                Press `Esc`, `Ctrl-C` or `q` to stop running.\n\
-                Press `s` to fetch Pl4yrs status.\n";
+                Press `Esc`, `Ctrl-C` or `q` to stop running.\n";
 
         let paragraph = Paragraph::new(text)
             .block(block)
