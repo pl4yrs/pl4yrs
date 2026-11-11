@@ -17,6 +17,7 @@ pub enum BackendEvent {
     StatusReceived(PlayerStatus),
     Disconnected(String),
     RequestFailed(String),
+    MalformedStatus(String),
 }
 
 #[derive(Debug)]
@@ -171,13 +172,20 @@ async fn receive_status_events(
 
     while let Some(event) = events.next().await {
         let event = event?;
-        let status = serde_json::from_str::<PlayerStatus>(&event.data)?;
-
-        if event_tx
-            .send(Event::Backend(BackendEvent::StatusReceived(status)))
-            .is_err()
-        {
-            return Ok(());
+        match serde_json::from_str::<PlayerStatus>(&event.data) {
+            Ok(status) => {
+                if event_tx
+                    .send(Event::Backend(BackendEvent::StatusReceived(status)))
+                    .is_err()
+                {
+                    return Ok(());
+                }
+            }
+            Err(error) => {
+                let _ = event_tx.send(Event::Backend(BackendEvent::MalformedStatus(
+                    error.to_string(),
+                )));
+            }
         }
     }
 

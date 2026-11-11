@@ -68,6 +68,9 @@ impl App {
                     BackendEvent::Disconnected(message) => self.backend_disconnected(message),
                     BackendEvent::RequestFailed(message) => self.backend_failed(message),
                     BackendEvent::StatusReceived(status) => self.backend_update_status(status),
+                    BackendEvent::MalformedStatus(message) => {
+                        self.backend_malformed_status(message)
+                    }
                 },
             }
         }
@@ -130,5 +133,9 @@ impl App {
     pub fn backend_update_status(&mut self, status: PlayerStatus) {
         self.status = Some(status);
         self.last_error = None;
+    }
+
+    pub fn backend_malformed_status(&mut self, message: String) {
+        self.last_error = Some(message);
     }
 }
