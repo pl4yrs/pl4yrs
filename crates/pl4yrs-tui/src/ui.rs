@@ -19,7 +19,7 @@ impl Widget for &App {
     // - https://docs.rs/ratatui/latest/ratatui/widgets/index.html
     // - https://github.com/ratatui/ratatui/tree/master/examples
     fn render(self, area: Rect, buf: &mut Buffer) {
-        let help_height = if area.height >= 14 { 5 } else { 0 };
+        let help_height = if area.height >= 14 { 3 } else { 0 };
 
         let [help_area, player_area, footer_area] = Layout::vertical([
             Constraint::Length(help_height),
@@ -33,8 +33,7 @@ impl Widget for &App {
             .title_alignment(Alignment::Center)
             .border_type(BorderType::Rounded);
 
-        let text = "Welcome to Pl4yrs.\n\
-                Press `Esc`, `Ctrl-C` or `q` to stop running.\n";
+        let text = "Welcome to Pl4yrs.\n";
 
         let paragraph = Paragraph::new(text)
             .block(block)
@@ -58,9 +57,9 @@ impl Widget for &App {
         PlayerStatusWidget::new(self.status.as_ref()).render(player_panel, buf);
 
         FooterWidget::new(
-            self.status.as_ref(),
-            self.last_error.as_ref(),
             self.connection_status.as_ref(),
+            self.status.is_some(),
+            self.last_error.as_deref(),
         )
         .render(footer_area, buf);
     }
