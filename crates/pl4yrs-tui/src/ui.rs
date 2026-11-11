@@ -5,8 +5,8 @@ use ratatui::{
     widgets::{Block, BorderType, Paragraph, Widget},
 };
 
-use crate::app::{App, ConnectionStatus};
 use crate::widgets::PlayerStatusWidget;
+use crate::{app::App, widgets::FooterWidget};
 
 impl Widget for &App {
     /// Renders the user interface widgets.
@@ -22,9 +22,6 @@ impl Widget for &App {
             Constraint::Length(1),
         ])
         .areas(area);
-
-        let [connection_area, status_area] =
-            Layout::horizontal([Constraint::Length(20), Constraint::Fill(1)]).areas(footer_area);
 
         let block = Block::bordered()
             .title("pl4yrs-tui")
@@ -43,30 +40,11 @@ impl Widget for &App {
         paragraph.render(help_area, buf);
 
         PlayerStatusWidget::new(self.status.as_ref()).render(player_area, buf);
-
-        let (connection_color, connection_text) = match &self.connection_status {
-            Some(ConnectionStatus::Connecting) => (Color::Yellow, "Connecting..."),
-            Some(ConnectionStatus::Connected) => (Color::Green, "Connected"),
-            Some(ConnectionStatus::Disconnected(_message)) => (Color::Red, "Disconnected"),
-            None => (Color::Red, "Unknown Status"),
-        };
-
-        let connection_status = Paragraph::new(connection_text)
-            .fg(connection_color)
-            .bg(Color::Black)
-            .left_aligned();
-        connection_status.render(connection_area, buf);
-
-        let footer_text = match (&self.last_error, &self.status) {
-            (Some(error), _) => format!("Server error: {error}"),
-            (None, Some(_)) => "Status received".to_owned(),
-            (None, None) => "Press s to fetch status".to_owned(),
-        };
-
-        let footer_status = Paragraph::new(footer_text)
-            .fg(Color::Cyan)
-            .bg(Color::Black)
-            .centered();
-        footer_status.render(status_area, buf);
+        FooterWidget::new(
+            self.status.as_ref(),
+            self.last_error.as_ref(),
+            self.connection_status.as_ref(),
+        )
+        .render(footer_area, buf);
     }
 }
