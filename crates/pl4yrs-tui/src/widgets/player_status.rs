@@ -73,6 +73,15 @@ fn state_label(state: &PlayerState) -> &'static str {
     }
 }
 
+fn state_style(state: &PlayerState) -> Style {
+    let state_color = match state {
+        PlayerState::Playing => Color::Green,
+        PlayerState::Paused | PlayerState::Buffering => Color::Yellow,
+        _ => Color::Gray,
+    };
+    Style::default().fg(state_color)
+}
+
 fn format_time(duration: Duration) -> String {
     let total_seconds = duration.as_secs();
     let hours = total_seconds / 3600;
@@ -84,6 +93,14 @@ fn format_time(duration: Duration) -> String {
     } else {
         format!("{minutes}:{seconds:02}")
     }
+}
+
+fn render_state_line(state: &PlayerState, area: Rect, buf: &mut Buffer) {
+    Paragraph::new(Line::from(Span::styled(
+        state_label(state),
+        state_style(state),
+    )))
+    .render(area, buf);
 }
 
 fn render_progress(progress: Option<&Progress>, area: Rect, buf: &mut Buffer) {
@@ -123,18 +140,39 @@ fn render_progress(progress: Option<&Progress>, area: Rect, buf: &mut Buffer) {
     }
 }
 
-fn render_compact(status: &PlayerStatus, area: Rect, buf: &mut Buffer) {
-    let title = status
+fn media_title(status: &PlayerStatus) -> &str {
+    status
         .media
         .as_ref()
         .map(|media| media.title.as_str())
         .filter(|title| !title.is_empty())
-        .unwrap_or("No media information");
+        .unwrap_or("No media information")
+}
+
+fn media_artist(status: &PlayerStatus) -> &str {
+    status
+        .media
+        .as_ref()
+        .and_then(|media| media.artist.as_deref())
+        .unwrap_or("")
+}
+
+fn media_album(status: &PlayerStatus) -> &str {
+    status
+        .media
+        .as_ref()
+        .and_then(|media| media.album.as_deref())
+        .filter(|album| !album.is_empty())
+        .unwrap_or("Unknown album")
+}
+
+fn render_compact(status: &PlayerStatus, area: Rect, buf: &mut Buffer) {
+    let title = media_title(status);
 
     let line = Line::from(vec![
         Span::styled(
             format!("{} · ", state_label(&status.state)),
-            Style::default().fg(Color::Cyan),
+            state_style(&status.state),
         ),
         Span::styled(title, Style::default().bold()),
     ]);
@@ -154,23 +192,15 @@ fn render_normal(status: &PlayerStatus, area: Rect, buf: &mut Buffer) {
     ])
     .areas(area);
 
-    Paragraph::new(state_label(&status.state)).render(state_area, buf);
+    render_state_line(&status.state, state_area, buf);
 
-    let media = status.media.as_ref();
-
-    let title = media
-        .map(|media| media.title.as_str())
-        .filter(|title| !title.is_empty())
-        .unwrap_or("No media information");
+    let title = media_title(status);
+    let artist = media_artist(status);
 
     Paragraph::new(title)
         .bold()
         .wrap(Wrap { trim: true })
         .render(title_area, buf);
-
-    let artist = media
-        .and_then(|media| media.artist.as_deref())
-        .unwrap_or("");
 
     Paragraph::new(artist).render(artist_area, buf);
 
@@ -192,12 +222,9 @@ fn render_detailed(status: &PlayerStatus, area: Rect, buf: &mut Buffer) {
     ])
     .areas(details_area);
 
-    let media = status.media.as_ref();
-
-    let title = media
-        .map(|media| media.title.as_str())
-        .filter(|title| !title.is_empty())
-        .unwrap_or("No media information");
+    let title = media_title(status);
+    let artist = media_artist(status);
+    let album = media_album(status);
 
     let title_height: u16 = if title.len() > usize::from(media_area.width) {
         2
@@ -214,27 +241,7 @@ fn render_detailed(status: &PlayerStatus, area: Rect, buf: &mut Buffer) {
     ])
     .areas(media_area);
 
-    let artist = media
-        .and_then(|media| media.artist.as_deref())
-        .filter(|artist| !artist.is_empty())
-        .unwrap_or("Unknown artist");
-
-    let album = media
-        .and_then(|media| media.album.as_deref())
-        .filter(|album| !album.is_empty())
-        .unwrap_or("Unknown album");
-
-    let state_color = match &status.state {
-        PlayerState::Playing => Color::Green,
-        PlayerState::Paused | PlayerState::Buffering => Color::Yellow,
-        _ => Color::Gray,
-    };
-
-    Paragraph::new(Line::from(Span::styled(
-        state_label(&status.state),
-        Style::default().fg(state_color),
-    )))
-    .render(state_area, buf);
+    render_state_line(&status.state, state_area, buf);
 
     Paragraph::new(Line::from(Span::styled(title, Style::default().bold())))
         .wrap(Wrap { trim: true })
