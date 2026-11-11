@@ -38,8 +38,6 @@ pub enum Event {
 pub enum AppEvent {
     /// Quit the application.
     Quit,
-    /// Fetch backend status.
-    FetchStatus,
 }
 
 /// Terminal event handler.

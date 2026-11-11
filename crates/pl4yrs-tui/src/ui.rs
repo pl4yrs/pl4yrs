@@ -5,7 +5,7 @@ use ratatui::{
     widgets::{Block, BorderType, Paragraph, Widget},
 };
 
-use crate::app::App;
+use crate::app::{App, ConnectionStatus};
 use crate::widgets::PlayerStatusWidget;
 
 impl Widget for &App {
@@ -23,14 +23,16 @@ impl Widget for &App {
         ])
         .areas(area);
 
+        let [connection_area, status_area] =
+            Layout::horizontal([Constraint::Length(20), Constraint::Fill(1)]).areas(footer_area);
+
         let block = Block::bordered()
             .title("pl4yrs-tui")
             .title_alignment(Alignment::Center)
             .border_type(BorderType::Rounded);
 
         let text = "Welcome to Pl4yrs.\n\
-                Press `Esc`, `Ctrl-C` or `q` to stop running.\n\
-                Press `s` to fetch Pl4yrs status.\n";
+                Press `Esc`, `Ctrl-C` or `q` to stop running.\n";
 
         let paragraph = Paragraph::new(text)
             .block(block)
@@ -42,16 +44,29 @@ impl Widget for &App {
 
         PlayerStatusWidget::new(self.status.as_ref()).render(player_area, buf);
 
+        let (connection_color, connection_text) = match &self.connection_status {
+            Some(ConnectionStatus::Connecting) => (Color::Yellow, "Connecting..."),
+            Some(ConnectionStatus::Connected) => (Color::Green, "Connected"),
+            Some(ConnectionStatus::Disconnected(_message)) => (Color::Red, "Disconnected"),
+            None => (Color::Red, "Unknown Status"),
+        };
+
+        let connection_status = Paragraph::new(connection_text)
+            .fg(connection_color)
+            .bg(Color::Black)
+            .left_aligned();
+        connection_status.render(connection_area, buf);
+
         let footer_text = match (&self.last_error, &self.status) {
             (Some(error), _) => format!("Server error: {error}"),
             (None, Some(_)) => "Status received".to_owned(),
             (None, None) => "Press s to fetch status".to_owned(),
         };
 
-        let footer = Paragraph::new(footer_text)
+        let footer_status = Paragraph::new(footer_text)
             .fg(Color::Cyan)
             .bg(Color::Black)
             .centered();
-        footer.render(footer_area, buf);
+        footer_status.render(status_area, buf);
     }
 }

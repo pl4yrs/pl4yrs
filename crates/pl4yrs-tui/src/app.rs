@@ -19,6 +19,14 @@ pub struct App {
     pub client: Pl4yrsClient,
     pub status: Option<PlayerStatus>,
     pub last_error: Option<String>,
+    pub connection_status: Option<ConnectionStatus>,
+}
+
+#[derive(Debug)]
+pub enum ConnectionStatus {
+    Connecting,
+    Connected,
+    Disconnected(String),
 }
 
 impl App {
@@ -32,6 +40,7 @@ impl App {
             client: pl4yrs_client,
             status: None,
             last_error: None,
+            connection_status: None,
         })
     }
 
@@ -50,7 +59,6 @@ impl App {
                     _ => {}
                 },
                 Event::App(app_event) => match app_event {
-                    AppEvent::FetchStatus => self.fetch_status(),
                     AppEvent::Quit => self.quit(),
                 },
                 Event::Backend(backend_event) => match backend_event {
@@ -59,6 +67,9 @@ impl App {
                     BackendEvent::Disconnected(message) => self.backend_disconnected(message),
                     BackendEvent::RequestFailed(message) => self.backend_failed(message),
                     BackendEvent::StatusReceived(status) => self.backend_update_status(status),
+                    BackendEvent::MalformedStatus(message) => {
+                        self.backend_malformed_status(message)
+                    }
                 },
             }
         }
@@ -72,7 +83,6 @@ impl App {
             KeyCode::Char('c' | 'C') if key_event.modifiers == KeyModifiers::CONTROL => {
                 self.events.send(AppEvent::Quit)
             }
-            KeyCode::Char('s' | 'S') => self.events.send(AppEvent::FetchStatus),
             _ => {}
         }
         Ok(())
@@ -102,11 +112,17 @@ impl App {
         }
     }
 
-    pub fn backend_connecting(&mut self) {}
+    pub fn backend_connecting(&mut self) {
+        self.connection_status = Some(ConnectionStatus::Connecting);
+    }
 
-    pub fn backend_connected(&mut self) {}
+    pub fn backend_connected(&mut self) {
+        self.connection_status = Some(ConnectionStatus::Connected);
+    }
 
-    pub fn backend_disconnected(&mut self, _message: String) {}
+    pub fn backend_disconnected(&mut self, message: String) {
+        self.connection_status = Some(ConnectionStatus::Disconnected(message));
+    }
 
     pub fn backend_failed(&mut self, message: String) {
         self.last_error = Some(message);
@@ -115,5 +131,9 @@ impl App {
     pub fn backend_update_status(&mut self, status: PlayerStatus) {
         self.status = Some(status);
         self.last_error = None;
+    }
+
+    pub fn backend_malformed_status(&mut self, message: String) {
+        self.last_error = Some(message);
     }
 }
