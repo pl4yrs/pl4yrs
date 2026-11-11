@@ -1,6 +1,6 @@
 use ratatui::{
     buffer::Buffer,
-    layout::{Alignment, Constraint, Layout, Rect},
+    layout::{Alignment, Constraint, Flex, Layout, Rect},
     style::{Color, Stylize},
     widgets::{Block, BorderType, Paragraph, Widget},
 };
@@ -39,7 +39,18 @@ impl Widget for &App {
 
         paragraph.render(help_area, buf);
 
-        PlayerStatusWidget::new(self.status.as_ref()).render(player_area, buf);
+        let [player_column] = Layout::horizontal([Constraint::Length(player_area.width.min(100))])
+            .flex(Flex::Center)
+            .areas(player_area);
+
+        let [player_panel, _remaining] = Layout::vertical([
+            Constraint::Length(player_column.height.min(10)),
+            Constraint::Min(0),
+        ])
+        .areas(player_column);
+
+        PlayerStatusWidget::new(self.status.as_ref()).render(player_panel, buf);
+
         FooterWidget::new(
             self.status.as_ref(),
             self.last_error.as_ref(),
