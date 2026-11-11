@@ -1,5 +1,7 @@
 use crate::event::Event;
 use anyhow::Result;
+use eventsource_stream::Eventsource;
+use futures::StreamExt;
 use pl4yrs_api::playback::PlayerStatus;
 use std::time::Duration;
 use tokio::sync::mpsc::{self, Receiver, UnboundedSender};
@@ -83,10 +85,87 @@ async fn run_command_worker(
 }
 
 async fn run_sse_worker(
-    _http: reqwest::Client,
-    _base_url: reqwest::Url,
-    _event_tx: UnboundedSender<Event>,
+    http: reqwest::Client,
+    base_url: reqwest::Url,
+    event_tx: UnboundedSender<Event>,
 ) {
+    let url = match base_url.join("/status/events") {
+        Ok(url) => url,
+        Err(error) => {
+            let _ = event_tx.send(Event::Backend(BackendEvent::Disconnected(
+                error.to_string(),
+            )));
+            return;
+        }
+    };
+
+    loop {
+        if event_tx
+            .send(Event::Backend(BackendEvent::Connecting))
+            .is_err()
+        {
+            return;
+        }
+
+        let result = tokio::select! {
+            _ = event_tx.closed() => return,
+            result = receive_status_events(&http, &url, &event_tx) => result,
+        };
+
+        let message = match result {
+            Ok(()) => "Status stream closed".to_owned(),
+            Err(error) => error.to_string(),
+        };
+
+        if event_tx
+            .send(Event::Backend(BackendEvent::Disconnected(message)))
+            .is_err()
+        {
+            return;
+        }
+
+        tokio::select! {
+            _ = event_tx.closed() => return,
+            _ = tokio::time::sleep(Duration::from_secs(2)) => {}
+        }
+    }
+}
+
+async fn receive_status_events(
+    http: &reqwest::Client,
+    url: &reqwest::Url,
+    event_tx: &UnboundedSender<Event>,
+) -> Result<()> {
+    let response = http
+        .get(url.clone())
+        .header(reqwest::header::ACCEPT, "text/event-stream")
+        .send()
+        .await?
+        .error_for_status()?;
+
+    if event_tx
+        .send(Event::Backend(BackendEvent::Connected))
+        .is_err()
+    {
+        return Ok(());
+    }
+
+    let events = response.bytes_stream().eventsource();
+    futures::pin_mut!(events);
+
+    while let Some(event) = events.next().await {
+        let event = event?;
+        let status = serde_json::from_str::<PlayerStatus>(&event.data)?;
+
+        if event_tx
+            .send(Event::Backend(BackendEvent::StatusReceived(status)))
+            .is_err()
+        {
+            return Ok(());
+        }
+    }
+
+    Ok(())
 }
 
 pub async fn fetch_status(http: &reqwest::Client, base_url: &reqwest::Url) -> Result<PlayerStatus> {

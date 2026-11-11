@@ -19,6 +19,14 @@ pub struct App {
     pub client: Pl4yrsClient,
     pub status: Option<PlayerStatus>,
     pub last_error: Option<String>,
+    pub connection_status: Option<ConnectionStatus>,
+}
+
+#[derive(Debug)]
+pub enum ConnectionStatus {
+    Connecting,
+    Connected,
+    Disconnected(String),
 }
 
 impl App {
@@ -32,6 +40,7 @@ impl App {
             client: pl4yrs_client,
             status: None,
             last_error: None,
+            connection_status: None,
         })
     }
 
@@ -102,11 +111,17 @@ impl App {
         }
     }
 
-    pub fn backend_connecting(&mut self) {}
+    pub fn backend_connecting(&mut self) {
+        self.connection_status = Some(ConnectionStatus::Connecting);
+    }
 
-    pub fn backend_connected(&mut self) {}
+    pub fn backend_connected(&mut self) {
+        self.connection_status = Some(ConnectionStatus::Connected);
+    }
 
-    pub fn backend_disconnected(&mut self, _message: String) {}
+    pub fn backend_disconnected(&mut self, message: String) {
+        self.connection_status = Some(ConnectionStatus::Disconnected(message));
+    }
 
     pub fn backend_failed(&mut self, message: String) {
         self.last_error = Some(message);
