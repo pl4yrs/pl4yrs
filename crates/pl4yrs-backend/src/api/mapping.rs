@@ -1,5 +1,7 @@
 use crate::services::sendspin::{PlaybackState, SendSpinStatus};
-use pl4yrs_api::playback::{MediaItem, PlaybackSource, PlayerState, PlayerStatus, Progress};
+use pl4yrs_api::playback::{
+    MediaItem, PlaybackSource, PlayerOutput, PlayerState, PlayerStatus, Progress,
+};
 
 impl From<&SendSpinStatus> for PlayerStatus {
     fn from(status: &SendSpinStatus) -> Self {
@@ -13,6 +15,12 @@ impl From<&SendSpinStatus> for PlayerStatus {
                 PlaybackState::Paused => PlayerState::Paused,
                 PlaybackState::Stopped => PlayerState::Stopped,
             },
+            output: Some(PlayerOutput {
+                volume: status.player_volume,
+                group_volume: status.group_volume,
+                device: status.output.clone(),
+                delay_ms: status.output_delay_ms,
+            }),
             ..Default::default()
         };
 
