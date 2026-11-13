@@ -38,6 +38,12 @@ pub enum Event {
 pub enum AppEvent {
     /// Quit the application.
     Quit,
+
+    /// Increase volume.
+    VolumeIncrease,
+
+    /// Decrease volume.
+    VolumeDecrease,
 }
 
 /// Terminal event handler.

@@ -3,6 +3,7 @@ use crate::api::state;
 use axum::response::sse::{Event, KeepAlive, Sse};
 use axum::{extract::State, response::Json};
 use futures_core::Stream;
+use pl4yrs_api::control::SetVolume;
 use pl4yrs_api::playback::PlayerStatus;
 use serde_json::{Value, json};
 use std::convert::Infallible;
@@ -43,6 +44,20 @@ pub async fn get_config(
         .map(Json)
         .map_err(|e| {
             tracing::warn!(error = %e, "sendspin status failed");
+            ApiError::from(&e)
+        })
+}
+
+pub async fn set_volume(
+    State(s): State<state::AppState>,
+    Json(body): Json<SetVolume>,
+) -> Result<Json<()>, ApiError> {
+    s.sendspin_service
+        .set_volume(body.volume)
+        .await
+        .map(Json)
+        .map_err(|e| {
+            tracing::warn!(error = %e, "sendspin volume failed");
             ApiError::from(&e)
         })
 }

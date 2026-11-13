@@ -2,12 +2,14 @@ use crate::event::Event;
 use anyhow::Result;
 use eventsource_stream::Eventsource;
 use futures::StreamExt;
+use pl4yrs_api::control::{SetVolume, Volume};
 use pl4yrs_api::playback::PlayerStatus;
 use std::time::Duration;
 use tokio::sync::mpsc::{self, Receiver, UnboundedSender};
 
 pub enum BackendCommand {
     FetchStatus,
+    SetVolume(Volume),
 }
 
 #[derive(Clone, Debug)]
@@ -80,6 +82,14 @@ async fn run_command_worker(
                 if event_tx.send(Event::Backend(event)).is_err() {
                     break;
                 }
+            }
+            BackendCommand::SetVolume(volume) => {
+                if let Err(error) = set_volume(&http, &base_url, volume).await {
+                    let event = BackendEvent::RequestFailed(error.to_string());
+                    if event_tx.send(Event::Backend(event)).is_err() {
+                        break;
+                    }
+                };
             }
         }
     }
@@ -202,6 +212,22 @@ pub async fn fetch_status(http: &reqwest::Client, base_url: &reqwest::Url) -> Re
         .error_for_status()?
         .json::<PlayerStatus>()
         .await?)
+}
+
+pub async fn set_volume(
+    http: &reqwest::Client,
+    base_url: &reqwest::Url,
+    volume: Volume,
+) -> Result<()> {
+    let url = base_url.join("/volume")?;
+
+    http.post(url)
+        .json(&SetVolume { volume })
+        .send()
+        .await?
+        .error_for_status()?;
+
+    Ok(())
 }
 
 impl Drop for Pl4yrsClient {

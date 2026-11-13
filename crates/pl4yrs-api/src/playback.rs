@@ -4,6 +4,7 @@ use std::time::Duration;
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct PlayerStatus {
     pub state: PlayerState,
+    pub output: Option<PlayerOutput>,
     pub source: Option<PlaybackSource>,
     pub media: Option<MediaItem>,
     pub progress: Option<Progress>,
@@ -43,10 +44,19 @@ pub struct Progress {
     pub estimated: bool,
 }
 
+#[derive(Clone, Debug, Default, Serialize, Deserialize)]
+pub struct PlayerOutput {
+    pub volume: u8,
+    pub group_volume: Option<u8>,
+    pub delay_ms: u64,
+    pub device: String,
+}
+
 impl Default for PlayerStatus {
     fn default() -> Self {
         PlayerStatus {
             state: PlayerState::Idle,
+            output: Some(PlayerOutput::default()),
             source: None,
             media: None,
             progress: None,
@@ -122,5 +132,21 @@ mod tests {
         assert_eq!(progress.position.as_secs(), 8612);
         assert_eq!(progress.estimated, true);
         assert!(progress.duration.is_none());
+    }
+
+    #[test]
+    fn output_volume_and_device() {
+        let output: PlayerOutput = serde_json::from_value(json!({
+            "volume" : 20,
+            "group_volume" : 42,
+            "delay_ms" : 0,
+            "device" : "plughw:CARD=DigiAMP,DEV=0"
+        }))
+        .unwrap();
+
+        assert_eq!(output.device, "plughw:CARD=DigiAMP,DEV=0");
+        assert_eq!(output.volume, 20);
+        assert_eq!(output.group_volume, Some(42));
+        assert_eq!(output.delay_ms, 0);
     }
 }

@@ -1,4 +1,5 @@
 use anyhow::Result;
+use pl4yrs_api::control::Volume;
 use serde::Serialize;
 use std::fs::File;
 use std::io::{self, BufRead};
@@ -78,6 +79,8 @@ pub struct SendSpinService {
     status_tx: Arc<watch::Sender<SendSpinStatus>>,
 }
 
+// Implementing the sendspin-cpp-cli protocol
+// Details of the protocol are available here https://github.com/Sendspin/sendspin-cpp-cli/wiki/Controlling-the-Player
 impl SendSpinService {
     pub fn new(socket_path: PathBuf, config_file: PathBuf) -> Self {
         let (status_tx, status_rx) = watch::channel(SendSpinStatus::default());
@@ -122,6 +125,22 @@ impl SendSpinService {
         stream.read_to_string(&mut response).await?;
 
         Self::parse_status_response(&response)
+    }
+
+    // This actually sets the group volume. There doesn't seem to be a way to set this specific
+    // player volume via the exposed interface
+    pub async fn set_volume(&self, volume: Volume) -> Result<(), SendSpinError> {
+        let mut stream = UnixStream::connect(&self.socket_path)
+            .await
+            .map_err(SendSpinError::Connect)?;
+
+        let volume_cmd = format!("vol {}\n", volume.get());
+        stream.write_all(volume_cmd.as_bytes()).await?;
+
+        let mut response = String::new();
+        stream.read_to_string(&mut response).await?;
+
+        Self::parse_volume_response(&response)
     }
 
     pub fn status(&self) -> SendSpinStatus {
@@ -211,6 +230,17 @@ impl SendSpinService {
             }
         }
         Ok(status)
+    }
+
+    fn parse_volume_response(response: &str) -> Result<(), SendSpinError> {
+        match response.trim() {
+            "ok" => Ok(()),
+            "" => Err(SendSpinError::MalformedResponse),
+            other => {
+                error!("vol command failed: {}", other);
+                Err(SendSpinError::CommandFailed)
+            }
+        }
     }
 
     fn parse_state(value: &str) -> PlaybackState {
@@ -355,4 +385,6 @@ pub enum SendSpinError {
     ConfigAccess(#[source] std::io::Error),
     #[error("invalid sendspin configuratio")]
     ConfigInvalid(String),
+    #[error("sendspin command failed")]
+    CommandFailed,
 }
