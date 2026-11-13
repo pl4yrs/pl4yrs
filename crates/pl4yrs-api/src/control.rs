@@ -40,8 +40,8 @@ impl Serialize for Volume {
     }
 }
 
-impl<'a> Deserialize<'a> for Volume {
-    fn deserialize<D: Deserializer<'a>>(d: D) -> Result<Self, D::Error> {
+impl<'de> Deserialize<'de> for Volume {
+    fn deserialize<D: Deserializer<'de>>(d: D) -> Result<Self, D::Error> {
         let value = u8::deserialize(d)?;
         Self::new(value).map_err(serde::de::Error::custom)
     }
