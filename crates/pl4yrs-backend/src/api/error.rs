@@ -49,6 +49,9 @@ impl From<&SendSpinError> for ApiError {
                 ApiError::new("SENDSPIN_CONFIG_INVALID", "invalid sendspin configuration")
                     .with_details(&token.to_string())
             }
+            SendSpinError::CommandFailed => {
+                ApiError::new("SENDSPIN_COMMAND_FAILED", "sendspin command failed")
+            }
         }
     }
 }
