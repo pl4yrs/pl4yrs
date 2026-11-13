@@ -256,7 +256,12 @@ fn render_detailed(status: &PlayerStatus, area: Rect, buf: &mut Buffer) {
     .render(album_area, buf);
 
     let (source_name, server) = match status.source.as_ref() {
-        Some(PlaybackSource::Sendspin { server }) => ("SendSpin", Some(server.as_str())),
+        Some(PlaybackSource::Sendspin { server }) => ("SendSpin", {
+            match server.find("(") {
+                Some(index) => Some(server.split_at(index).0),
+                None => Some(server.as_str()),
+            }
+        }),
         Some(PlaybackSource::LocalFile) => ("Local file", None),
         None => ("Not reported", None),
     };
