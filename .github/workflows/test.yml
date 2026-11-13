@@ -21,10 +21,10 @@ jobs:
           components: rustfmt clippy
       - name: Check formatting
         run: cargo fmt --check
-      - name: Run Clippy linter
-        run: cargo clippy -- -D warnings
       - name: Install build dependencies
         uses: knu/apt-bundle@e2785799997e987b92cfe5d73e325991d4eb2dcd # 1.4.2
+      - name: Run Clippy linter
+        run: cargo clippy -- -D warnings
       - name: Build
         run: cargo build --verbose
       - name: Run tests
