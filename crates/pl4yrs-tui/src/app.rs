@@ -145,9 +145,8 @@ impl App {
         let Some(output) = self.status.as_ref().and_then(|s| s.output.as_ref()) else {
             return;
         };
-        let volume = Volume::new(output.volume.saturating_add(1).min(Volume::MAX))
-            .map_err(|error| self.last_error = Some(error.to_string()))
-            .unwrap();
+        let volume = output.group_volume.unwrap_or(output.volume);
+        let volume = Volume::from_clamped(volume.saturating_add(1));
         self.set_volume(volume);
     }
 
@@ -155,9 +154,8 @@ impl App {
         let Some(output) = self.status.as_ref().and_then(|s| s.output.as_ref()) else {
             return;
         };
-        let volume = Volume::new(output.volume.saturating_sub(1).min(Volume::MAX))
-            .map_err(|error| self.last_error = Some(error.to_string()))
-            .unwrap();
+        let volume = output.group_volume.unwrap_or(output.volume);
+        let volume = Volume::from_clamped(volume.saturating_sub(1));
         self.set_volume(volume);
     }
 

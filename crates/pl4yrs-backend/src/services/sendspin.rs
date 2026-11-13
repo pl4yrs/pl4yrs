@@ -233,18 +233,14 @@ impl SendSpinService {
     }
 
     fn parse_volume_response(response: &str) -> Result<(), SendSpinError> {
-        let lines: Vec<&str> = response.lines().collect();
-
-        for line in lines {
-            match line {
-                "ok" => return Ok(()),
-                "_" | &_ => {
-                    error!("Vol command failed: {}", line);
-                    return Err(SendSpinError::CommandFailed);
-                }
+        match response.trim() {
+            "ok" => Ok(()),
+            "" => Err(SendSpinError::MalformedResponse),
+            other => {
+                error!("vol command failed: {}", other);
+                Err(SendSpinError::CommandFailed)
             }
         }
-        Ok(())
     }
 
     fn parse_state(value: &str) -> PlaybackState {

@@ -17,6 +17,10 @@ impl Volume {
     pub fn get(self) -> u8 {
         self.0
     }
+
+    pub fn from_clamped(value: u8) -> Self {
+        Self(value.min(Self::MAX))
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
