@@ -57,7 +57,7 @@ pub async fn set_volume(
         .await
         .map(Json)
         .map_err(|e| {
-            tracing::warn!(error = %e, "sendsping volume failed");
+            tracing::warn!(error = %e, "sendspin volume failed");
             ApiError::from(&e)
         })
 }
