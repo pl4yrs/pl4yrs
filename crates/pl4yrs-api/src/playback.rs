@@ -10,7 +10,7 @@ pub struct PlayerStatus {
     pub progress: Option<Progress>,
 }
 
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Copy, Debug, Serialize, Deserialize, PartialEq)]
 #[serde(rename_all = "snake_case")]
 pub enum PlayerState {
     Idle,

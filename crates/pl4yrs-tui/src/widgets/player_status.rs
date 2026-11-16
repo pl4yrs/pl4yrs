@@ -7,6 +7,8 @@ use ratatui::text::{Line, Span};
 use ratatui::widgets::{Block, LineGauge, Padding, Paragraph, Widget, Wrap};
 use std::time::Duration;
 
+use crate::app::PendingPlayback;
+
 enum PlayerLayout {
     Compact,
     Normal,
@@ -15,11 +17,20 @@ enum PlayerLayout {
 
 pub struct PlayerStatusWidget<'a> {
     status: Option<&'a PlayerStatus>,
+    pending_playback: Option<&'a PendingPlayback>,
 }
 
 impl<'a> PlayerStatusWidget<'a> {
     pub fn new(status: Option<&'a PlayerStatus>) -> Self {
-        Self { status }
+        Self {
+            status,
+            pending_playback: None,
+        }
+    }
+
+    pub fn pending(mut self, pending_playback: Option<&'a PendingPlayback>) -> Self {
+        self.pending_playback = pending_playback;
+        self
     }
 }
 
@@ -45,9 +56,9 @@ impl Widget for PlayerStatusWidget<'_> {
         };
 
         match layout_for(inner) {
-            PlayerLayout::Compact => render_compact(status, inner, buf),
-            PlayerLayout::Normal => render_normal(status, inner, buf),
-            PlayerLayout::Detailed => render_detailed(status, inner, buf),
+            PlayerLayout::Compact => render_compact(status, self.pending_playback, inner, buf),
+            PlayerLayout::Normal => render_normal(status, self.pending_playback, inner, buf),
+            PlayerLayout::Detailed => render_detailed(status, self.pending_playback, inner, buf),
         }
     }
 }
@@ -59,6 +70,14 @@ fn layout_for(area: Rect) -> PlayerLayout {
         PlayerLayout::Normal
     } else {
         PlayerLayout::Detailed
+    }
+}
+
+fn effective_label(status: &PlayerStatus, pending: Option<&PendingPlayback>) -> &'static str {
+    match pending.map(|p| p.intent) {
+        Some(PlayerState::Playing) => "Starting...",
+        Some(PlayerState::Paused) => "Pausing...",
+        _ => state_label(&status.state),
     }
 }
 
@@ -95,10 +114,15 @@ fn format_time(duration: Duration) -> String {
     }
 }
 
-fn render_state_line(state: &PlayerState, area: Rect, buf: &mut Buffer) {
+fn render_state_line(
+    status: &PlayerStatus,
+    pending_playback: Option<&PendingPlayback>,
+    area: Rect,
+    buf: &mut Buffer,
+) {
     Paragraph::new(Line::from(Span::styled(
-        state_label(state),
-        state_style(state),
+        effective_label(status, pending_playback),
+        state_style(&status.state),
     )))
     .render(area, buf);
 }
@@ -189,12 +213,17 @@ fn media_album(status: &PlayerStatus) -> &str {
         .unwrap_or("Unknown album")
 }
 
-fn render_compact(status: &PlayerStatus, area: Rect, buf: &mut Buffer) {
+fn render_compact(
+    status: &PlayerStatus,
+    pending_playback: Option<&PendingPlayback>,
+    area: Rect,
+    buf: &mut Buffer,
+) {
     let title = media_title(status);
 
     let line = Line::from(vec![
         Span::styled(
-            format!("{} - ", state_label(&status.state)),
+            format!("{} - ", effective_label(status, pending_playback)),
             state_style(&status.state),
         ),
         Span::styled(title, Style::default().bold()),
@@ -205,7 +234,12 @@ fn render_compact(status: &PlayerStatus, area: Rect, buf: &mut Buffer) {
         .render(area, buf);
 }
 
-fn render_normal(status: &PlayerStatus, area: Rect, buf: &mut Buffer) {
+fn render_normal(
+    status: &PlayerStatus,
+    pending_playback: Option<&PendingPlayback>,
+    area: Rect,
+    buf: &mut Buffer,
+) {
     let [state_area, title_area, artist_area, progress_area, _rest] = Layout::vertical([
         Constraint::Length(1),
         Constraint::Length(1),
@@ -215,7 +249,7 @@ fn render_normal(status: &PlayerStatus, area: Rect, buf: &mut Buffer) {
     ])
     .areas(area);
 
-    render_state_line(&status.state, state_area, buf);
+    render_state_line(status, pending_playback, state_area, buf);
 
     let title = media_title(status);
     let artist = media_artist(status);
@@ -230,7 +264,12 @@ fn render_normal(status: &PlayerStatus, area: Rect, buf: &mut Buffer) {
     render_progress(status.progress.as_ref(), progress_area, buf);
 }
 
-fn render_detailed(status: &PlayerStatus, area: Rect, buf: &mut Buffer) {
+fn render_detailed(
+    status: &PlayerStatus,
+    pending_playback: Option<&PendingPlayback>,
+    area: Rect,
+    buf: &mut Buffer,
+) {
     if area.is_empty() {
         return;
     }
@@ -272,7 +311,7 @@ fn render_detailed(status: &PlayerStatus, area: Rect, buf: &mut Buffer) {
     ])
     .areas(media_area);
 
-    render_state_line(&status.state, state_area, buf);
+    render_state_line(status, pending_playback, state_area, buf);
 
     Paragraph::new(Line::from(Span::styled(title, Style::default().bold())))
         .wrap(Wrap { trim: true })

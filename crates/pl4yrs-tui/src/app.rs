@@ -9,7 +9,10 @@ use pl4yrs_api::{
     playback::{PlayerState, PlayerStatus},
 };
 use ratatui::DefaultTerminal;
-use tokio::sync::mpsc::error::TrySendError;
+use std::time::Duration;
+use tokio::{sync::mpsc::error::TrySendError, time::Instant};
+
+const PENDING_COMMAND_TIMEOUT: Duration = Duration::from_secs(10);
 
 /// Application.
 #[derive(Debug)]
@@ -23,6 +26,8 @@ pub struct App {
     pub status: Option<PlayerStatus>,
     pub last_error: Option<String>,
     pub connection_status: Option<ConnectionStatus>,
+
+    pub pending_playback: Option<PendingPlayback>,
 }
 
 #[derive(Debug)]
@@ -30,6 +35,12 @@ pub enum ConnectionStatus {
     Connecting,
     Connected,
     Disconnected(String),
+}
+
+#[derive(Debug, Copy, Clone)]
+pub struct PendingPlayback {
+    pub intent: PlayerState,
+    pub since: Instant,
 }
 
 impl App {
@@ -44,6 +55,7 @@ impl App {
             status: None,
             last_error: None,
             connection_status: None,
+            pending_playback: None,
         })
     }
 
@@ -101,7 +113,15 @@ impl App {
     ///
     /// The tick event is where you can update the state of your application with any logic that
     /// needs to be updated at a fixed frame rate. E.g. polling a server, updating an animation.
-    pub fn tick(&self) {}
+    pub fn tick(&mut self) {
+        if let Some(pending) = self.pending_playback
+            && pending.since.elapsed() > PENDING_COMMAND_TIMEOUT
+        {
+            self.pending_playback = None;
+            self.last_error =
+                Some("No response from player - the command may not have been applied".to_owned());
+        }
+    }
 
     /// Set running to false to quit the application.
     pub fn quit(&mut self) {
@@ -138,10 +158,22 @@ impl App {
     }
 
     pub fn backend_failed(&mut self, message: String) {
+        self.pending_playback = None;
         self.last_error = Some(message);
     }
 
     pub fn backend_update_status(&mut self, status: PlayerStatus) {
+        if let Some(pending) = self.pending_playback {
+            let satisfied = match pending.intent {
+                PlayerState::Playing => {
+                    matches!(status.state, PlayerState::Playing | PlayerState::Buffering)
+                }
+                other => status.state == other,
+            };
+            if satisfied || status.state == pending.intent {
+                self.pending_playback = None;
+            }
+        }
         self.status = Some(status);
         self.last_error = None;
     }
@@ -173,11 +205,22 @@ impl App {
     }
 
     pub fn toggle_playback(&mut self) {
-        let cmd = match self.status.as_ref().map(|s| &s.state) {
-            Some(PlayerState::Playing) | Some(PlayerState::Buffering) => BackendCommand::Pause,
-            Some(_) => BackendCommand::Play,
+        if self.pending_playback.is_some() {
+            return;
+        }
+
+        let (cmd, intent) = match self.status.as_ref().map(|s| s.state) {
+            Some(PlayerState::Playing) | Some(PlayerState::Buffering) => {
+                (BackendCommand::Pause, PlayerState::Paused)
+            }
+            Some(_) => (BackendCommand::Play, PlayerState::Playing),
             None => return,
         };
+
+        self.pending_playback = Some(PendingPlayback {
+            intent,
+            since: Instant::now(),
+        });
         self.send_backend_command(cmd);
     }
 }
