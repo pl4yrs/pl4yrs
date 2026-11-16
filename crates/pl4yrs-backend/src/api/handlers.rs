@@ -1,6 +1,7 @@
 use crate::api::error::ApiError;
 use crate::api::state;
 use axum::extract::rejection::JsonRejection;
+use axum::http::StatusCode;
 use axum::response::sse::{Event, KeepAlive, Sse};
 use axum::{extract::State, response::Json};
 use futures_core::Stream;
@@ -52,12 +53,12 @@ pub async fn get_config(
 pub async fn set_volume(
     State(s): State<state::AppState>,
     body: Result<Json<SetVolume>, JsonRejection>,
-) -> Result<Json<()>, ApiError> {
+) -> Result<StatusCode, ApiError> {
     let Json(body) = body.map_err(ApiError::from)?;
     s.sendspin_service
         .set_volume(body.volume)
         .await
-        .map(Json)
+        .map(|_| StatusCode::NO_CONTENT)
         .map_err(|e| {
             tracing::warn!(error = %e, "sendspin volume failed");
             ApiError::from(&e)
