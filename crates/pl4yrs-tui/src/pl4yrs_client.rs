@@ -3,6 +3,7 @@ use anyhow::Result;
 use eventsource_stream::Eventsource;
 use futures::StreamExt;
 use pl4yrs_api::control::{SetVolume, Volume};
+use pl4yrs_api::error::ApiError;
 use pl4yrs_api::playback::PlayerStatus;
 use std::time::Duration;
 use tokio::sync::mpsc::{self, Receiver, UnboundedSender};
@@ -237,27 +238,45 @@ pub async fn set_volume(
     base_url: &reqwest::Url,
     volume: Volume,
 ) -> Result<()> {
-    let url = base_url.join("/volume")?;
-
-    http.post(url)
+    let response = http
+        .post(base_url.join("/volume")?)
         .json(&SetVolume { volume })
         .send()
-        .await?
-        .error_for_status()?;
+        .await?;
 
-    Ok(())
+    check_response(response).await
+}
+
+async fn check_response(response: reqwest::Response) -> Result<()> {
+    let status = response.status();
+    if status.is_success() {
+        return Ok(());
+    }
+
+    match response.json::<pl4yrs_api::error::ApiError>().await {
+        Ok(error) => {
+            let details = error
+                .details
+                .filter(|value| !value.is_empty())
+                .map(|value| format!(": {value}"))
+                .unwrap_or_default();
+
+            anyhow::bail!("{}{}", error.message, details);
+        }
+        Err(_) => anyhow::bail!("request failed with {status}"),
+    }
+}
+
+async fn send_action(http: &reqwest::Client, url: reqwest::Url) -> Result<()> {
+    check_response(http.post(url).send().await?).await
 }
 
 pub async fn play(http: &reqwest::Client, base_url: &reqwest::Url) -> Result<()> {
-    let url = base_url.join("/play")?;
-    http.post(url).send().await?.error_for_status()?;
-    Ok(())
+    send_action(http, base_url.join("/play")?).await
 }
 
 pub async fn pause(http: &reqwest::Client, base_url: &reqwest::Url) -> Result<()> {
-    let url = base_url.join("/pause")?;
-    http.post(url).send().await?.error_for_status()?;
-    Ok(())
+    send_action(http, base_url.join("/pause")?).await
 }
 
 impl Drop for Pl4yrsClient {

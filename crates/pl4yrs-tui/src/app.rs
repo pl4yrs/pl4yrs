@@ -173,14 +173,11 @@ impl App {
     }
 
     pub fn toggle_playback(&mut self) {
-        match self.status.as_ref().and_then(|s| Some(&s.state)) {
-            Some(PlayerState::Paused) | Some(PlayerState::Idle) => {
-                self.send_backend_command(BackendCommand::Play)
-            }
-            Some(PlayerState::Playing) | Some(PlayerState::Buffering) => {
-                self.send_backend_command(BackendCommand::Pause)
-            }
-            _ => (),
-        }
+        let cmd = match self.status.as_ref().map(|s| &s.state) {
+            Some(PlayerState::Playing) | Some(PlayerState::Buffering) => BackendCommand::Pause,
+            Some(_) => BackendCommand::Play,
+            None => return,
+        };
+        self.send_backend_command(cmd);
     }
 }
