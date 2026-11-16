@@ -115,9 +115,7 @@ impl SendSpinService {
     }
 
     async fn fetch_status(socket_path: &Path) -> Result<SendSpinStatus, SendSpinError> {
-        let status_command = "status";
-        let response = Self::send_command(socket_path, status_command).await?;
-
+        let response = Self::send_command(socket_path, "status").await?;
         Self::parse_status_response(&response)
     }
 
@@ -395,7 +393,7 @@ pub enum SendSpinError {
     MalformedResponse,
     #[error("could not access sendspin config")]
     ConfigAccess(#[source] std::io::Error),
-    #[error("invalid sendspin configuratio")]
+    #[error("invalid sendspin configuration")]
     ConfigInvalid(String),
     #[error("sendspin command failed")]
     CommandFailed,

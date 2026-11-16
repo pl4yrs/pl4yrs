@@ -89,7 +89,7 @@ async fn run_command_worker(
                     if event_tx.send(Event::Backend(event)).is_err() {
                         break;
                     }
-                };
+                }
             }
         }
     }

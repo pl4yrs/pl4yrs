@@ -104,7 +104,11 @@ impl App {
     }
 
     pub fn fetch_status(&mut self) {
-        match self.client.try_send(BackendCommand::FetchStatus) {
+        self.send_backend_command(BackendCommand::FetchStatus);
+    }
+
+    fn send_backend_command(&mut self, cmd: BackendCommand) {
+        match self.client.try_send(cmd) {
             Ok(()) => {}
             Err(TrySendError::Full(_)) => {
                 self.last_error =
@@ -160,15 +164,6 @@ impl App {
     }
 
     fn set_volume(&mut self, volume: Volume) {
-        match self.client.try_send(BackendCommand::SetVolume(volume)) {
-            Ok(()) => {}
-            Err(TrySendError::Full(_)) => {
-                self.last_error =
-                    Some("Too many pending requests; please try again shortly.".to_owned());
-            }
-            Err(TrySendError::Closed(_)) => {
-                self.last_error = Some("The backend command worker is unavailable.".to_owned());
-            }
-        }
+        self.send_backend_command(BackendCommand::SetVolume(volume));
     }
 }
