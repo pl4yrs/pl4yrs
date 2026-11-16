@@ -140,7 +140,19 @@ impl SendSpinService {
         let mut response = String::new();
         stream.read_to_string(&mut response).await?;
 
-        Self::parse_volume_response(&response)
+        Self::parse_volume_response(&response)?;
+
+        self.refresh_status().await;
+        Ok(())
+    }
+
+    async fn refresh_status(&self) {
+        match Self::fetch_status(&self.socket_path).await {
+            Ok(status) => {
+                let _ = self.status_tx.send(status);
+            }
+            Err(e) => warn!("sendspin status refresh failed: {e}"),
+        }
     }
 
     pub fn status(&self) -> SendSpinStatus {
