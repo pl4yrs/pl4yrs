@@ -400,3 +400,44 @@ pub enum SendSpinError {
     #[error("sendspin command failed")]
     CommandFailed,
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn ok_response_accepts_ok() {
+        for input in ["ok", "ok\n", " ok ", "\nok\n", "ok\r\n"] {
+            assert!(
+                SendSpinService::parse_ok_response(input).is_ok(),
+                "input: {input:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn ok_response_rejects_empty_as_malformed() {
+        for input in ["", "\n", "   "] {
+            assert!(
+                matches!(
+                    SendSpinService::parse_ok_response(input),
+                    Err(SendSpinError::MalformedResponse)
+                ),
+                "input: {input:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn ok_response_rejects_failures_as_command_failed() {
+        for input in ["error", "invalid volume", "OK", "ok\nextra"] {
+            assert!(
+                matches!(
+                    SendSpinService::parse_ok_response(input),
+                    Err(SendSpinError::CommandFailed)
+                ),
+                "input: {input:?}"
+            );
+        }
+    }
+}
