@@ -253,7 +253,7 @@ async fn check_response(response: reqwest::Response) -> Result<()> {
         return Ok(());
     }
 
-    match response.json::<pl4yrs_api::error::ApiError>().await {
+    match response.json::<ApiError>().await {
         Ok(error) => {
             let details = error
                 .details
