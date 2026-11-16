@@ -73,11 +73,20 @@ fn layout_for(area: Rect) -> PlayerLayout {
     }
 }
 
-fn effective_label(status: &PlayerStatus, pending: Option<&PendingPlayback>) -> &'static str {
-    match pending.map(|p| p.intent) {
-        Some(PlayerState::Playing) => "Starting...",
-        Some(PlayerState::Paused) => "Pausing...",
-        _ => state_label(&status.state),
+fn intent_label_and_style(
+    status: &PlayerStatus,
+    pending_playback: Option<&PendingPlayback>,
+) -> (&'static str, Style) {
+    match pending_playback.map(|p| p.intent) {
+        Some(intent) => (
+            match intent {
+                PlayerState::Playing => "Starting...",
+                PlayerState::Paused => "Pausing...",
+                _ => state_label(&status.state),
+            },
+            Style::default().fg(Color::LightYellow),
+        ),
+        None => (state_label(&status.state), state_style(&status.state)),
     }
 }
 
@@ -120,11 +129,8 @@ fn render_state_line(
     area: Rect,
     buf: &mut Buffer,
 ) {
-    Paragraph::new(Line::from(Span::styled(
-        effective_label(status, pending_playback),
-        state_style(&status.state),
-    )))
-    .render(area, buf);
+    let (label, style) = intent_label_and_style(status, pending_playback);
+    Paragraph::new(Line::from(Span::styled(label, style))).render(area, buf);
 }
 
 fn render_volume(output: &PlayerOutput, area: Rect, buf: &mut Buffer) {
@@ -220,12 +226,10 @@ fn render_compact(
     buf: &mut Buffer,
 ) {
     let title = media_title(status);
+    let (label, style) = intent_label_and_style(status, pending_playback);
 
     let line = Line::from(vec![
-        Span::styled(
-            format!("{} - ", effective_label(status, pending_playback)),
-            state_style(&status.state),
-        ),
+        Span::styled(format!("{} - ", label), style),
         Span::styled(title, Style::default().bold()),
     ]);
 
