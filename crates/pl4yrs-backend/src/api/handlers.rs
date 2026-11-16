@@ -45,7 +45,7 @@ pub async fn get_config(
         .await
         .map(Json)
         .map_err(|e| {
-            tracing::warn!(error = %e, "sendspin status failed");
+            tracing::warn!(error = %e, "sendspin get config failed");
             ApiError::from(&e)
         })
 }
