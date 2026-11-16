@@ -1,8 +1,11 @@
 use crate::api::error::ApiError;
 use crate::api::state;
+use axum::extract::rejection::JsonRejection;
+use axum::http::StatusCode;
 use axum::response::sse::{Event, KeepAlive, Sse};
 use axum::{extract::State, response::Json};
 use futures_core::Stream;
+use pl4yrs_api::control::SetVolume;
 use pl4yrs_api::playback::PlayerStatus;
 use serde_json::{Value, json};
 use std::convert::Infallible;
@@ -42,7 +45,22 @@ pub async fn get_config(
         .await
         .map(Json)
         .map_err(|e| {
-            tracing::warn!(error = %e, "sendspin status failed");
+            tracing::warn!(error = %e, "sendspin get config failed");
+            ApiError::from(&e)
+        })
+}
+
+pub async fn set_volume(
+    State(s): State<state::AppState>,
+    body: Result<Json<SetVolume>, JsonRejection>,
+) -> Result<StatusCode, ApiError> {
+    let Json(body) = body.map_err(ApiError::from)?;
+    s.sendspin_service
+        .set_volume(body.volume)
+        .await
+        .map(|_| StatusCode::NO_CONTENT)
+        .map_err(|e| {
+            tracing::warn!(error = %e, "sendspin volume failed");
             ApiError::from(&e)
         })
 }

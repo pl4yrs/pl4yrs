@@ -4,7 +4,7 @@ use crate::{
 };
 use anyhow::{Error, Result};
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
-use pl4yrs_api::playback::PlayerStatus;
+use pl4yrs_api::{control::Volume, playback::PlayerStatus};
 use ratatui::DefaultTerminal;
 use tokio::sync::mpsc::error::TrySendError;
 
@@ -60,6 +60,8 @@ impl App {
                 },
                 Event::App(app_event) => match app_event {
                     AppEvent::Quit => self.quit(),
+                    AppEvent::VolumeDecrease => self.volume_decrease(),
+                    AppEvent::VolumeIncrease => self.volume_increase(),
                 },
                 Event::Backend(backend_event) => match backend_event {
                     BackendEvent::Connecting => self.backend_connecting(),
@@ -83,6 +85,8 @@ impl App {
             KeyCode::Char('c' | 'C') if key_event.modifiers == KeyModifiers::CONTROL => {
                 self.events.send(AppEvent::Quit)
             }
+            KeyCode::Char('+') => self.events.send(AppEvent::VolumeIncrease),
+            KeyCode::Char('-') => self.events.send(AppEvent::VolumeDecrease),
             _ => {}
         }
         Ok(())
@@ -100,7 +104,11 @@ impl App {
     }
 
     pub fn fetch_status(&mut self) {
-        match self.client.try_send(BackendCommand::FetchStatus) {
+        self.send_backend_command(BackendCommand::FetchStatus);
+    }
+
+    fn send_backend_command(&mut self, cmd: BackendCommand) {
+        match self.client.try_send(cmd) {
             Ok(()) => {}
             Err(TrySendError::Full(_)) => {
                 self.last_error =
@@ -135,5 +143,27 @@ impl App {
 
     pub fn backend_malformed_status(&mut self, message: String) {
         self.last_error = Some(message);
+    }
+
+    pub fn volume_increase(&mut self) {
+        let Some(output) = self.status.as_ref().and_then(|s| s.output.as_ref()) else {
+            return;
+        };
+        let volume = output.group_volume.unwrap_or(output.volume);
+        let volume = Volume::from_clamped(volume.saturating_add(1));
+        self.set_volume(volume);
+    }
+
+    pub fn volume_decrease(&mut self) {
+        let Some(output) = self.status.as_ref().and_then(|s| s.output.as_ref()) else {
+            return;
+        };
+        let volume = output.group_volume.unwrap_or(output.volume);
+        let volume = Volume::from_clamped(volume.saturating_sub(1));
+        self.set_volume(volume);
+    }
+
+    fn set_volume(&mut self, volume: Volume) {
+        self.send_backend_command(BackendCommand::SetVolume(volume));
     }
 }

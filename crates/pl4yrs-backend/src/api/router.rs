@@ -1,5 +1,6 @@
 use crate::api::handlers;
 use crate::api::state;
+use axum::routing::post;
 use axum::{Router, routing::get};
 use tower_http::trace::TraceLayer;
 
@@ -8,6 +9,7 @@ pub fn get_router(state: state::AppState) -> Router {
         .route("/status", get(handlers::status))
         .route("/status/events", get(handlers::status_events))
         .route("/config", get(handlers::get_config))
+        .route("/volume", post(handlers::set_volume))
         .route("/health", get(handlers::health))
         .layer(TraceLayer::new_for_http())
         .with_state(state)

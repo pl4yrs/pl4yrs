@@ -1,4 +1,5 @@
 use anyhow::Result;
+use pl4yrs_api::control::Volume;
 use serde::Serialize;
 use std::fs::File;
 use std::io::{self, BufRead};
@@ -78,6 +79,8 @@ pub struct SendSpinService {
     status_tx: Arc<watch::Sender<SendSpinStatus>>,
 }
 
+// Implementing the sendspin-cpp-cli protocol
+// Details of the protocol are available here https://github.com/Sendspin/sendspin-cpp-cli/wiki/Controlling-the-Player
 impl SendSpinService {
     pub fn new(socket_path: PathBuf, config_file: PathBuf) -> Self {
         let (status_tx, status_rx) = watch::channel(SendSpinStatus::default());
@@ -112,16 +115,42 @@ impl SendSpinService {
     }
 
     async fn fetch_status(socket_path: &Path) -> Result<SendSpinStatus, SendSpinError> {
+        let response = Self::send_command(socket_path, "status").await?;
+        Self::parse_status_response(&response)
+    }
+
+    // This actually sets the group volume. There doesn't seem to be a way to set this specific
+    // player volume via the exposed interface
+    pub async fn set_volume(&self, volume: Volume) -> Result<(), SendSpinError> {
+        self.run_command(&format!("vol {}", volume.get())).await
+    }
+
+    async fn run_command(&self, cmd: &str) -> Result<(), SendSpinError> {
+        let response = Self::send_command(&self.socket_path, cmd).await?;
+        Self::parse_ok_response(&response)?;
+        self.refresh_status().await;
+        Ok(())
+    }
+
+    async fn send_command(socket_path: &Path, cmd: &str) -> Result<String, SendSpinError> {
         let mut stream = UnixStream::connect(socket_path)
             .await
             .map_err(SendSpinError::Connect)?;
 
-        stream.write_all(b"status\n").await?;
+        stream.write_all(format!("{cmd}\n").as_bytes()).await?;
 
         let mut response = String::new();
         stream.read_to_string(&mut response).await?;
+        Ok(response)
+    }
 
-        Self::parse_status_response(&response)
+    async fn refresh_status(&self) {
+        match Self::fetch_status(&self.socket_path).await {
+            Ok(status) => {
+                let _ = self.status_tx.send(status);
+            }
+            Err(e) => warn!("sendspin status refresh failed: {e}"),
+        }
     }
 
     pub fn status(&self) -> SendSpinStatus {
@@ -211,6 +240,17 @@ impl SendSpinService {
             }
         }
         Ok(status)
+    }
+
+    fn parse_ok_response(response: &str) -> Result<(), SendSpinError> {
+        match response.trim() {
+            "ok" => Ok(()),
+            "" => Err(SendSpinError::MalformedResponse),
+            other => {
+                error!("command failed: {}", other);
+                Err(SendSpinError::CommandFailed)
+            }
+        }
     }
 
     fn parse_state(value: &str) -> PlaybackState {
@@ -353,6 +393,49 @@ pub enum SendSpinError {
     MalformedResponse,
     #[error("could not access sendspin config")]
     ConfigAccess(#[source] std::io::Error),
-    #[error("invalid sendspin configuratio")]
+    #[error("invalid sendspin configuration")]
     ConfigInvalid(String),
+    #[error("sendspin command failed")]
+    CommandFailed,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn ok_response_accepts_ok() {
+        for input in ["ok", "ok\n", " ok ", "\nok\n", "ok\r\n"] {
+            assert!(
+                SendSpinService::parse_ok_response(input).is_ok(),
+                "input: {input:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn ok_response_rejects_empty_as_malformed() {
+        for input in ["", "\n", "   "] {
+            assert!(
+                matches!(
+                    SendSpinService::parse_ok_response(input),
+                    Err(SendSpinError::MalformedResponse)
+                ),
+                "input: {input:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn ok_response_rejects_failures_as_command_failed() {
+        for input in ["error", "invalid volume", "OK", "ok\nextra"] {
+            assert!(
+                matches!(
+                    SendSpinService::parse_ok_response(input),
+                    Err(SendSpinError::CommandFailed)
+                ),
+                "input: {input:?}"
+            );
+        }
+    }
 }

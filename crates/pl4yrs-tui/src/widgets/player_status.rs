@@ -1,4 +1,4 @@
-use pl4yrs_api::playback::{PlaybackSource, PlayerState, PlayerStatus, Progress};
+use pl4yrs_api::playback::{PlaybackSource, PlayerOutput, PlayerState, PlayerStatus, Progress};
 use ratatui::buffer::Buffer;
 use ratatui::layout::{Constraint, Layout, Rect};
 use ratatui::prelude::Stylize;
@@ -103,6 +103,29 @@ fn render_state_line(state: &PlayerState, area: Rect, buf: &mut Buffer) {
     .render(area, buf);
 }
 
+fn render_volume(output: &PlayerOutput, area: Rect, buf: &mut Buffer) {
+    if area.is_empty() {
+        return;
+    }
+
+    let mut volume_line = Line::from(vec![Span::styled(
+        format!("📢 Volume: {}", output.volume),
+        Style::default().bold(),
+    )]);
+
+    let Some(group_volume) = output.group_volume else {
+        return;
+    };
+
+    let group_volume_span = Span::styled(
+        format!(" - 🔗 Group Volume: {}", group_volume),
+        Style::default(),
+    );
+
+    volume_line.push_span(group_volume_span);
+    Paragraph::new(volume_line).render(area, buf);
+}
+
 fn render_progress(progress: Option<&Progress>, area: Rect, buf: &mut Buffer) {
     if area.is_empty() {
         return;
@@ -171,7 +194,7 @@ fn render_compact(status: &PlayerStatus, area: Rect, buf: &mut Buffer) {
 
     let line = Line::from(vec![
         Span::styled(
-            format!("{} · ", state_label(&status.state)),
+            format!("{} - ", state_label(&status.state)),
             state_style(&status.state),
         ),
         Span::styled(title, Style::default().bold()),
@@ -232,9 +255,17 @@ fn render_detailed(status: &PlayerStatus, area: Rect, buf: &mut Buffer) {
         1
     };
 
-    let [state_area, title_area, artist_area, album_area, _rest] = Layout::vertical([
+    let [
+        state_area,
+        title_area,
+        artist_area,
+        album_area,
+        volume_area,
+        _rest,
+    ] = Layout::vertical([
         Constraint::Length(1),
         Constraint::Length(title_height),
+        Constraint::Length(1),
         Constraint::Length(1),
         Constraint::Length(1),
         Constraint::Min(0),
@@ -256,7 +287,12 @@ fn render_detailed(status: &PlayerStatus, area: Rect, buf: &mut Buffer) {
     .render(album_area, buf);
 
     let (source_name, server) = match status.source.as_ref() {
-        Some(PlaybackSource::Sendspin { server }) => ("SendSpin", Some(server.as_str())),
+        Some(PlaybackSource::Sendspin { server }) => ("SendSpin", {
+            match server.find("(") {
+                Some(index) => Some(server.split_at(index).0),
+                None => Some(server.as_str()),
+            }
+        }),
         Some(PlaybackSource::LocalFile) => ("Local file", None),
         None => ("Not reported", None),
     };
@@ -274,5 +310,8 @@ fn render_detailed(status: &PlayerStatus, area: Rect, buf: &mut Buffer) {
         .wrap(Wrap { trim: true })
         .render(source_area, buf);
 
+    if let Some(output) = status.output.as_ref() {
+        render_volume(output, volume_area, buf);
+    }
     render_progress(status.progress.as_ref(), progress_area, buf);
 }
