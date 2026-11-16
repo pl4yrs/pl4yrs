@@ -65,6 +65,28 @@ pub async fn set_volume(
         })
 }
 
+pub async fn play(State(s): State<state::AppState>) -> Result<StatusCode, ApiError> {
+    s.sendspin_service
+        .play()
+        .await
+        .map(|_| StatusCode::NO_CONTENT)
+        .map_err(|e| {
+            tracing::warn!(error = %e, "sendspin play failed");
+            ApiError::from(&e)
+        })
+}
+
+pub async fn pause(State(s): State<state::AppState>) -> Result<StatusCode, ApiError> {
+    s.sendspin_service
+        .pause()
+        .await
+        .map(|_| StatusCode::NO_CONTENT)
+        .map_err(|e| {
+            tracing::warn!(error = %e, "sendspin pause failed");
+            ApiError::from(&e)
+        })
+}
+
 pub async fn health(State(_s): State<state::AppState>) -> Json<Value> {
     debug!(command = "Health", "internal");
     Json(json!({ "status": "OK" }))

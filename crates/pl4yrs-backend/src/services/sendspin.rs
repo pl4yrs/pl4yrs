@@ -125,6 +125,14 @@ impl SendSpinService {
         self.run_command(&format!("vol {}", volume.get())).await
     }
 
+    pub async fn play(&self) -> Result<(), SendSpinError> {
+        self.run_command("play").await
+    }
+
+    pub async fn pause(&self) -> Result<(), SendSpinError> {
+        self.run_command("pause").await
+    }
+
     async fn run_command(&self, cmd: &str) -> Result<(), SendSpinError> {
         let response = Self::send_command(&self.socket_path, cmd).await?;
         Self::parse_ok_response(&response)?;

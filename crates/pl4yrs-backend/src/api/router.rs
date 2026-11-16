@@ -7,6 +7,8 @@ use tower_http::trace::TraceLayer;
 pub fn get_router(state: state::AppState) -> Router {
     Router::new()
         .route("/status", get(handlers::status))
+        .route("/play", post(handlers::play))
+        .route("/pause", post(handlers::pause))
         .route("/status/events", get(handlers::status_events))
         .route("/config", get(handlers::get_config))
         .route("/volume", post(handlers::set_volume))
