@@ -222,13 +222,9 @@ async fn receive_status_events(
 }
 
 pub async fn fetch_status(http: &reqwest::Client, base_url: &reqwest::Url) -> Result<PlayerStatus> {
-    let url = base_url.join("/status")?;
-
-    Ok(http
-        .get(url)
-        .send()
+    let response = http.get(base_url.join("/status")?).send().await?;
+    Ok(check_response(response)
         .await?
-        .error_for_status()?
         .json::<PlayerStatus>()
         .await?)
 }
@@ -244,13 +240,14 @@ pub async fn set_volume(
         .send()
         .await?;
 
-    check_response(response).await
+    check_response(response).await?;
+    Ok(())
 }
 
-async fn check_response(response: reqwest::Response) -> Result<()> {
+async fn check_response(response: reqwest::Response) -> Result<reqwest::Response> {
     let status = response.status();
     if status.is_success() {
-        return Ok(());
+        return Ok(response);
     }
 
     match response.json::<ApiError>().await {
@@ -268,7 +265,8 @@ async fn check_response(response: reqwest::Response) -> Result<()> {
 }
 
 async fn send_action(http: &reqwest::Client, url: reqwest::Url) -> Result<()> {
-    check_response(http.post(url).send().await?).await
+    check_response(http.post(url).send().await?).await?;
+    Ok(())
 }
 
 pub async fn play(http: &reqwest::Client, base_url: &reqwest::Url) -> Result<()> {
