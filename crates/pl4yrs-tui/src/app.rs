@@ -4,7 +4,10 @@ use crate::{
 };
 use anyhow::{Error, Result};
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
-use pl4yrs_api::{control::Volume, playback::PlayerStatus};
+use pl4yrs_api::{
+    control::Volume,
+    playback::{PlayerState, PlayerStatus},
+};
 use ratatui::DefaultTerminal;
 use tokio::sync::mpsc::error::TrySendError;
 
@@ -62,6 +65,7 @@ impl App {
                     AppEvent::Quit => self.quit(),
                     AppEvent::VolumeDecrease => self.volume_decrease(),
                     AppEvent::VolumeIncrease => self.volume_increase(),
+                    AppEvent::TogglePlayback => self.toggle_playback(),
                 },
                 Event::Backend(backend_event) => match backend_event {
                     BackendEvent::Connecting => self.backend_connecting(),
@@ -87,6 +91,7 @@ impl App {
             }
             KeyCode::Char('+') => self.events.send(AppEvent::VolumeIncrease),
             KeyCode::Char('-') => self.events.send(AppEvent::VolumeDecrease),
+            KeyCode::Char(' ') => self.events.send(AppEvent::TogglePlayback),
             _ => {}
         }
         Ok(())
@@ -165,5 +170,17 @@ impl App {
 
     fn set_volume(&mut self, volume: Volume) {
         self.send_backend_command(BackendCommand::SetVolume(volume));
+    }
+
+    pub fn toggle_playback(&mut self) {
+        match self.status.as_ref().and_then(|s| Some(&s.state)) {
+            Some(PlayerState::Paused) | Some(PlayerState::Idle) => {
+                self.send_backend_command(BackendCommand::Play)
+            }
+            Some(PlayerState::Playing) | Some(PlayerState::Buffering) => {
+                self.send_backend_command(BackendCommand::Pause)
+            }
+            _ => (),
+        }
     }
 }

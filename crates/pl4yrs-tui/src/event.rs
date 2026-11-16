@@ -44,6 +44,9 @@ pub enum AppEvent {
 
     /// Decrease volume.
     VolumeDecrease,
+
+    /// Toggle playback
+    TogglePlayback,
 }
 
 /// Terminal event handler.

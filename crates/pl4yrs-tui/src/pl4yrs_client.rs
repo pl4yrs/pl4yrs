@@ -10,6 +10,8 @@ use tokio::sync::mpsc::{self, Receiver, UnboundedSender};
 pub enum BackendCommand {
     FetchStatus,
     SetVolume(Volume),
+    Play,
+    Pause,
 }
 
 #[derive(Clone, Debug)]
@@ -85,6 +87,22 @@ async fn run_command_worker(
             }
             BackendCommand::SetVolume(volume) => {
                 if let Err(error) = set_volume(&http, &base_url, volume).await {
+                    let event = BackendEvent::RequestFailed(error.to_string());
+                    if event_tx.send(Event::Backend(event)).is_err() {
+                        break;
+                    }
+                }
+            }
+            BackendCommand::Play => {
+                if let Err(error) = play(&http, &base_url).await {
+                    let event = BackendEvent::RequestFailed(error.to_string());
+                    if event_tx.send(Event::Backend(event)).is_err() {
+                        break;
+                    }
+                }
+            }
+            BackendCommand::Pause => {
+                if let Err(error) = pause(&http, &base_url).await {
                     let event = BackendEvent::RequestFailed(error.to_string());
                     if event_tx.send(Event::Backend(event)).is_err() {
                         break;
@@ -227,6 +245,18 @@ pub async fn set_volume(
         .await?
         .error_for_status()?;
 
+    Ok(())
+}
+
+pub async fn play(http: &reqwest::Client, base_url: &reqwest::Url) -> Result<()> {
+    let url = base_url.join("/play")?;
+    http.post(url).send().await?.error_for_status()?;
+    Ok(())
+}
+
+pub async fn pause(http: &reqwest::Client, base_url: &reqwest::Url) -> Result<()> {
+    let url = base_url.join("/pause")?;
+    http.post(url).send().await?.error_for_status()?;
     Ok(())
 }
 
