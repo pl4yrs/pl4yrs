@@ -115,14 +115,8 @@ impl SendSpinService {
     }
 
     async fn fetch_status(socket_path: &Path) -> Result<SendSpinStatus, SendSpinError> {
-        let mut stream = UnixStream::connect(socket_path)
-            .await
-            .map_err(SendSpinError::Connect)?;
-
-        stream.write_all(b"status\n").await?;
-
-        let mut response = String::new();
-        stream.read_to_string(&mut response).await?;
+        let status_command = "status";
+        let response = Self::send_command(socket_path, status_command).await?;
 
         Self::parse_status_response(&response)
     }
@@ -130,20 +124,26 @@ impl SendSpinService {
     // This actually sets the group volume. There doesn't seem to be a way to set this specific
     // player volume via the exposed interface
     pub async fn set_volume(&self, volume: Volume) -> Result<(), SendSpinError> {
-        let mut stream = UnixStream::connect(&self.socket_path)
+        self.run_command(&format!("vol {}", volume.get())).await
+    }
+
+    async fn run_command(&self, cmd: &str) -> Result<(), SendSpinError> {
+        let response = Self::send_command(&self.socket_path, cmd).await?;
+        Self::parse_ok_response(&response)?;
+        self.refresh_status().await;
+        Ok(())
+    }
+
+    async fn send_command(socket_path: &Path, cmd: &str) -> Result<String, SendSpinError> {
+        let mut stream = UnixStream::connect(socket_path)
             .await
             .map_err(SendSpinError::Connect)?;
 
-        let volume_cmd = format!("vol {}\n", volume.get());
-        stream.write_all(volume_cmd.as_bytes()).await?;
+        stream.write_all(format!("{cmd}\n").as_bytes()).await?;
 
         let mut response = String::new();
         stream.read_to_string(&mut response).await?;
-
-        Self::parse_volume_response(&response)?;
-
-        self.refresh_status().await;
-        Ok(())
+        Ok(response)
     }
 
     async fn refresh_status(&self) {
@@ -244,12 +244,12 @@ impl SendSpinService {
         Ok(status)
     }
 
-    fn parse_volume_response(response: &str) -> Result<(), SendSpinError> {
+    fn parse_ok_response(response: &str) -> Result<(), SendSpinError> {
         match response.trim() {
             "ok" => Ok(()),
             "" => Err(SendSpinError::MalformedResponse),
             other => {
-                error!("vol command failed: {}", other);
+                error!("command failed: {}", other);
                 Err(SendSpinError::CommandFailed)
             }
         }
