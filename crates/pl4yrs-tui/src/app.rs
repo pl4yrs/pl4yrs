@@ -10,6 +10,8 @@ use pl4yrs_api::{
 };
 use ratatui::DefaultTerminal;
 use std::time::Duration;
+#[cfg(test)]
+use tokio::sync::mpsc::Receiver;
 use tokio::{sync::mpsc::error::TrySendError, time::Instant};
 
 const PENDING_COMMAND_TIMEOUT: Duration = Duration::from_secs(5);
@@ -222,5 +224,135 @@ impl App {
             since: Instant::now(),
         });
         self.send_backend_command(cmd);
+    }
+
+    #[cfg(test)]
+    fn for_test() -> (Self, Receiver<BackendCommand>) {
+        let (client, command_rx) = Pl4yrsClient::for_test();
+        (
+            App {
+                running: true,
+                events: EventHandler::new(),
+                client,
+                status: None,
+                last_error: None,
+                connection_status: None,
+                pending_playback: None,
+            },
+            command_rx,
+        )
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use pl4yrs_api::playback::{PlayerOutput, PlayerState};
+    use std::panic;
+
+    fn status_with(state: PlayerState) -> PlayerStatus {
+        PlayerStatus {
+            state,
+            ..Default::default()
+        }
+    }
+
+    #[tokio::test]
+    async fn toggle_from_paused_sends_play_and_marks_pending() {
+        let (mut app, mut rx) = App::for_test();
+        app.backend_update_status(status_with(PlayerState::Paused));
+        app.toggle_playback();
+
+        assert!(matches!(rx.try_recv(), Ok(BackendCommand::Play)));
+        let pending = app.pending_playback.unwrap();
+        assert_eq!(pending.intent, PlayerState::Playing);
+        assert_eq!(pending.base_state, PlayerState::Paused);
+    }
+
+    #[tokio::test]
+    async fn toggle_while_pending_sends_nothing() {
+        let (mut app, mut rx) = App::for_test();
+        app.backend_update_status(status_with(PlayerState::Paused));
+        app.toggle_playback();
+        rx.try_recv().unwrap();
+        app.toggle_playback();
+
+        assert!(rx.try_recv().is_err());
+        assert!(app.pending_playback.is_some());
+    }
+
+    #[tokio::test]
+    async fn state_change_releases_pending_even_if_not_the_intent() {
+        let (mut app, _rx) = App::for_test();
+        app.backend_update_status(status_with(PlayerState::Paused));
+        app.toggle_playback();
+        app.backend_update_status(status_with(PlayerState::Stopped));
+
+        assert!(app.pending_playback.is_none());
+    }
+
+    #[tokio::test]
+    async fn status_update_with_unchanged_state_keeps_pending() {
+        let (mut app, _rx) = App::for_test();
+        app.backend_update_status(status_with(PlayerState::Paused));
+        app.toggle_playback();
+        app.backend_update_status(status_with(PlayerState::Paused));
+
+        assert!(app.pending_playback.is_some());
+    }
+
+    #[tokio::test]
+    async fn request_failure_clears_pending() {
+        let (mut app, _rx) = App::for_test();
+        app.backend_update_status(status_with(PlayerState::Paused));
+        app.toggle_playback();
+        app.backend_failed("cannot reach sendspin daemon".into());
+
+        assert!(app.pending_playback.is_none());
+        assert!(app.last_error.is_some());
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn pending_command_times_out() {
+        let (mut app, mut rx) = App::for_test();
+        app.backend_update_status(status_with(PlayerState::Paused));
+        app.toggle_playback();
+        rx.try_recv().unwrap();
+
+        tokio::time::advance(Duration::from_secs(PENDING_COMMAND_TIMEOUT.as_secs() - 1)).await;
+        app.tick();
+        assert!(app.pending_playback.is_some());
+        assert!(app.last_error.is_none());
+
+        tokio::time::advance(Duration::from_secs(2)).await;
+        app.tick();
+
+        assert!(app.pending_playback.is_none());
+        assert!(app.last_error.unwrap().contains("No response"));
+    }
+
+    #[tokio::test]
+    async fn volume_unaffected_by_playback_pending() {
+        let (mut app, mut rx) = App::for_test();
+
+        app.backend_update_status(PlayerStatus {
+            state: PlayerState::Paused,
+            output: Some(PlayerOutput {
+                volume: 42,
+                group_volume: Some(42),
+                ..Default::default()
+            }),
+            ..Default::default()
+        });
+
+        app.toggle_playback();
+        assert!(matches!(rx.try_recv(), Ok(BackendCommand::Play)));
+
+        app.volume_increase();
+
+        match rx.try_recv() {
+            Ok(BackendCommand::SetVolume(v)) => assert_eq!(v.get(), 43),
+            other => panic!("expected SetVolume, got {other:?}"),
+        }
     }
 }

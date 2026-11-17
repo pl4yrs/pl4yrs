@@ -8,6 +8,7 @@ use pl4yrs_api::playback::PlayerStatus;
 use std::time::Duration;
 use tokio::sync::mpsc::{self, Receiver, UnboundedSender};
 
+#[derive(Debug)]
 pub enum BackendCommand {
     FetchStatus,
     SetVolume(Volume),
@@ -65,6 +66,17 @@ impl Pl4yrsClient {
         command: BackendCommand,
     ) -> Result<(), mpsc::error::TrySendError<BackendCommand>> {
         self.command_tx.try_send(command)
+    }
+
+    #[cfg(test)]
+    pub fn for_test() -> (Self, mpsc::Receiver<BackendCommand>) {
+        let (command_tx, command_rx) = mpsc::channel(16);
+        let client = Self {
+            command_tx,
+            command_task: tokio::spawn(async {}),
+            sse_task: tokio::spawn(async {}),
+        };
+        (client, command_rx)
     }
 }
 
