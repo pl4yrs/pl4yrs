@@ -184,20 +184,20 @@ impl SendSpinService {
             debug!(line = line, "processing config line");
             if let Some((key, value)) = line.split_once("=") {
                 match key.trim() {
-                    "name" => config.name = value.to_string(),
-                    "manufacturer" => config.manufacturer = value.to_string(),
-                    "product_name" => config.product_name = value.to_string(),
-                    "output" => config.output = value.to_string(),
-                    "input" => config.input = value.to_string(),
+                    "name" => config.name = value.trim().to_string(),
+                    "manufacturer" => config.manufacturer = value.trim().to_string(),
+                    "product_name" => config.product_name = value.trim().to_string(),
+                    "output" => config.output = value.trim().to_string(),
+                    "input" => config.input = value.trim().to_string(),
                     "buffer-ms" => config.buffer_ms = value.trim().parse().unwrap(), // XXX should we return SendSpinError::ConfigInvalid(line))?
-                    "audio-format" => config.audio_format = value.to_string(),
+                    "audio-format" => config.audio_format = value.trim().to_string(),
                     "port" => config.port = value.trim().parse().unwrap(),
-                    "server" => config.server = value.to_string(),
+                    "server" => config.server = value.trim().to_string(),
                     "output-delay" => config.output_delay = value.trim().parse().unwrap(),
                     "allow-unpaired" => config.allow_unpaired = Self::parse_optional_bool(value),
                     "fixed-volume" => config.fixed_volume = Self::parse_optional_bool(value),
-                    "log-level" => config.log_level = value.to_string(),
-                    "control-socket" => config.control_socket = value.to_string(),
+                    "log-level" => config.log_level = value.trim().to_string(),
+                    "control-socket" => config.control_socket = value.trim().to_string(),
                     _ => {
                         error!("Unknown value: {}", key.trim());
                         return Err(SendSpinError::ConfigInvalid(line));
@@ -319,7 +319,7 @@ impl SendSpinService {
     }
 
     fn parse_optional_bool(value: &str) -> Option<bool> {
-        match value {
+        match value.trim() {
             "true" => Some(true),
             "false" => Some(false),
             _ => None,
@@ -653,5 +653,58 @@ note: one coffee please!";
     fn status_response_empty_input_returns_defaul() {
         let status = SendSpinService::parse_status_response("").unwrap();
         assert_eq!(status, SendSpinStatus::default());
+    }
+
+    #[tokio::test]
+    async fn config_parses_known_keys_skips_comments() {
+        let conf = "\
+# initial comment
+name = testplayer
+output = sysdefault
+buffer-ms = 200
+audio-format = pcm:48000:24:2
+port = 9000
+# middle comment
+server = ma.local
+output-delay = 10
+allow-unpaired = true
+fixed-volume = false
+log-level = debug
+control-socket = /tmp/control.sock
+
+# trailing comment
+";
+        let file = tempfile::NamedTempFile::new().unwrap();
+        std::fs::write(file.path(), conf).unwrap();
+
+        let service = SendSpinService::new(
+            PathBuf::from("/tmp/not-a-real.sock"),
+            file.path().to_path_buf(),
+        );
+        let config = service.get_config().await.unwrap();
+
+        assert_eq!(config.name, "testplayer");
+        assert_eq!(config.output, "sysdefault");
+        assert_eq!(config.buffer_ms, 200);
+        assert_eq!(config.port, 9000);
+        assert_eq!(config.server, "ma.local");
+        assert_eq!(config.output_delay, 10);
+        assert_eq!(config.allow_unpaired, Some(true));
+        assert_eq!(config.fixed_volume, Some(false));
+        assert_eq!(config.log_level, "debug");
+        assert_eq!(config.control_socket, "/tmp/control.sock");
+    }
+
+    #[tokio::test]
+    async fn config_rejects_unknown_key() {
+        let file = tempfile::NamedTempFile::new().unwrap();
+        std::fs::write(file.path(), "garbage-dump = 1\n").unwrap();
+
+        let service = SendSpinService::new(
+            PathBuf::from("/tmp/not-a-real.sock"),
+            file.path().to_path_buf(),
+        );
+        let config = service.get_config().await;
+        assert!(matches!(config, Err(SendSpinError::ConfigInvalid(_))));
     }
 }
