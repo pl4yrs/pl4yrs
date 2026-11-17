@@ -186,7 +186,7 @@ impl SendSpinService {
                 match key.trim() {
                     "name" => config.name = value.trim().to_string(),
                     "manufacturer" => config.manufacturer = value.trim().to_string(),
-                    "product_name" => config.product_name = value.trim().to_string(),
+                    "product-name" => config.product_name = value.trim().to_string(),
                     "output" => config.output = value.trim().to_string(),
                     "input" => config.input = value.trim().to_string(),
                     "buffer-ms" => config.buffer_ms = value.trim().parse().unwrap(), // XXX should we return SendSpinError::ConfigInvalid(line))?
@@ -374,7 +374,7 @@ impl Default for SendSpinConfig {
     fn default() -> Self {
         Self {
             name: "playrs".to_string(),
-            manufacturer: "senspin-cpp-cli".to_string(),
+            manufacturer: "sendspin-cpp-cli".to_string(),
             product_name: "sendspin-cli".to_string(),
             output: String::new(),
             input: String::new(),
@@ -591,7 +591,7 @@ mod tests {
     }
 
     #[test]
-    fn status_response_parses_all_fiels() {
+    fn status_response_parses_all_fields() {
         let response = "\
 name: Upper Toilet
 client id: pl4yrs-something
@@ -671,6 +671,8 @@ allow-unpaired = true
 fixed-volume = false
 log-level = debug
 control-socket = /tmp/control.sock
+manufacturer = sendspin-cpp-cli
+product-name = sendspin-cpp
 
 # trailing comment
 ";
@@ -693,6 +695,8 @@ control-socket = /tmp/control.sock
         assert_eq!(config.fixed_volume, Some(false));
         assert_eq!(config.log_level, "debug");
         assert_eq!(config.control_socket, "/tmp/control.sock");
+        assert_eq!(config.manufacturer, "sendspin-cpp-cli");
+        assert_eq!(config.product_name, "sendspin-cpp");
     }
 
     #[tokio::test]
