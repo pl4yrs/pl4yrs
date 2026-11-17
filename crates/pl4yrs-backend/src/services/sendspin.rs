@@ -548,4 +548,45 @@ mod tests {
             );
         }
     }
+
+    #[test]
+    fn toggle_parses_on_off_unknown() {
+        assert_eq!(SendSpinService::parse_optional_toggle("on"), Some(true));
+        assert_eq!(SendSpinService::parse_optional_toggle("off"), Some(false));
+        assert_eq!(SendSpinService::parse_optional_toggle("unknown"), None);
+        assert_eq!(SendSpinService::parse_optional_toggle("yes"), None);
+    }
+
+    #[test]
+    fn optional_u8_parses_number_rejects_garbage() {
+        assert_eq!(SendSpinService::parse_optional_u8("42"), Some(42));
+        assert_eq!(SendSpinService::parse_optional_u8("300"), None);
+        assert_eq!(SendSpinService::parse_optional_u8("unknown"), None);
+        assert_eq!(SendSpinService::parse_optional_u8("xyz"), None);
+    }
+
+    #[test]
+    fn optional_bool_parses_true_false() {
+        assert_eq!(SendSpinService::parse_optional_bool("true"), Some(true));
+        assert_eq!(SendSpinService::parse_optional_bool("false"), Some(false));
+        assert_eq!(SendSpinService::parse_optional_bool("yes"), None);
+    }
+
+    #[test]
+    fn volume_takes_first_token_defaults_zero() {
+        assert_eq!(SendSpinService::parse_volume("42 something"), 42);
+        assert_eq!(SendSpinService::parse_volume("43"), 43);
+        assert_eq!(SendSpinService::parse_volume("fgh "), 0);
+        assert_eq!(SendSpinService::parse_volume("    "), 0);
+        assert_eq!(SendSpinService::parse_volume(""), 0);
+    }
+
+    #[test]
+    fn delay_strips_ms_defaults_zero() {
+        assert_eq!(SendSpinService::parse_delay("42 ms"), 42);
+        assert_eq!(SendSpinService::parse_delay("314"), 314);
+        assert_eq!(SendSpinService::parse_delay("fgh "), 0);
+        assert_eq!(SendSpinService::parse_delay("    "), 0);
+        assert_eq!(SendSpinService::parse_delay(""), 0);
+    }
 }
