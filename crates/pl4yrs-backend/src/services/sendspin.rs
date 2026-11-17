@@ -279,7 +279,7 @@ impl SendSpinService {
         let position = Self::parse_clock(pos)?;
         let duration = match dur {
             "unknown" => None,
-            d => Self::parse_clock(d).filter(|d| !d.is_zero()),
+            d => Some(Self::parse_clock(d)?).filter(|d| !d.is_zero()),
         };
         Some((position, duration, estimated))
     }
@@ -503,6 +503,46 @@ mod tests {
         for input in ["1:02:03:09", "abc", "12:xa", "-2"] {
             assert_eq!(
                 SendSpinService::parse_clock(input),
+                None,
+                "input: {input:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn position_parses_position_and_duration() {
+        let (pos, dur, est) = SendSpinService::parse_optional_position("1:23 / 4:42").unwrap();
+        assert_eq!(pos, Duration::from_secs(83));
+        assert_eq!(dur, Some(Duration::from_secs(282)));
+        assert!(!est);
+    }
+
+    #[test]
+    fn position_parses_estimated_suffix() {
+        let (_pos, _dur, est) =
+            SendSpinService::parse_optional_position("1:23 / 4:42 (estimated)").unwrap();
+        assert!(est);
+    }
+
+    #[test]
+    fn position_unknown_duration_is_none() {
+        let (pos, dur, _) = SendSpinService::parse_optional_position("1:23 / unknown").unwrap();
+        assert_eq!(pos, Duration::from_secs(83));
+        assert_eq!(dur, None);
+    }
+
+    #[test]
+    fn position_zero_duration_is_none() {
+        let (pos, dur, _) = SendSpinService::parse_optional_position("1:23 / 0:00").unwrap();
+        assert_eq!(pos, Duration::from_secs(83));
+        assert_eq!(dur, None);
+    }
+
+    #[test]
+    fn position_rejects_invalid_strings() {
+        for input in ["1:23", "abc / 1:42", "1:23 / xa", ""] {
+            assert_eq!(
+                SendSpinService::parse_optional_position(input),
                 None,
                 "input: {input:?}"
             );
