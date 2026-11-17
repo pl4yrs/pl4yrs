@@ -589,4 +589,69 @@ mod tests {
         assert_eq!(SendSpinService::parse_delay("    "), 0);
         assert_eq!(SendSpinService::parse_delay(""), 0);
     }
+
+    #[test]
+    fn status_response_parses_all_fiels() {
+        let response = "\
+name: Upper Toilet
+client id: pl4yrs-something
+server: Music Assistant (ma.local)
+trust: full
+pairing: paired
+state: playing
+stream: flac
+track: No Stairway to Heaven
+position: 1:23 / 42:18 (estimated)
+group volume: 42
+repeat: on
+shuffle: unknown
+player volume: 65 fixed
+output: plughw:CARD=DigiAMP,DEV=0
+output delay: 50 ms
+note: one coffee please!";
+        let status = SendSpinService::parse_status_response(response).unwrap();
+
+        assert_eq!(status.name, "Upper Toilet");
+        assert_eq!(status.client_id, "pl4yrs-something");
+        assert_eq!(status.server, "Music Assistant (ma.local)");
+        assert_eq!(status.trust, "full");
+        assert_eq!(status.pairing, "paired");
+        assert_eq!(status.state, PlaybackState::Playing);
+        assert_eq!(status.stream, "flac");
+        assert_eq!(status.track, "No Stairway to Heaven");
+
+        let position = status.position.unwrap();
+        assert_eq!(position.position, Duration::from_secs(83));
+        assert_eq!(position.duration, Some(Duration::from_secs(2538)));
+        assert!(position.estimated);
+
+        assert_eq!(status.group_volume, Some(42));
+        assert_eq!(status.repeat, Some(true));
+        assert_eq!(status.shuffle, None);
+        assert_eq!(status.player_volume, 65);
+        assert_eq!(status.output, "plughw:CARD=DigiAMP,DEV=0");
+        assert_eq!(status.output_delay_ms, 50);
+        assert_eq!(status.note, "one coffee please!");
+    }
+
+    #[test]
+    fn status_response_unknown_key_is_malformed() {
+        let err = SendSpinService::parse_status_response("garbage key: some value").unwrap_err();
+        assert!(matches!(err, SendSpinError::MalformedResponse));
+    }
+
+    #[test]
+    fn status_response_skips_lines_missing_colon() {
+        let status = SendSpinService::parse_status_response(
+            "name: pl4yrs\ngarbage line without separator\n",
+        )
+        .unwrap();
+        assert_eq!(status.name, "pl4yrs");
+    }
+
+    #[test]
+    fn status_response_empty_input_returns_defaul() {
+        let status = SendSpinService::parse_status_response("").unwrap();
+        assert_eq!(status, SendSpinStatus::default());
+    }
 }
