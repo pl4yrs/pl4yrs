@@ -3,13 +3,17 @@ use anyhow::Result;
 use eventsource_stream::Eventsource;
 use futures::StreamExt;
 use pl4yrs_api::control::{SetVolume, Volume};
+use pl4yrs_api::error::ApiError;
 use pl4yrs_api::playback::PlayerStatus;
 use std::time::Duration;
 use tokio::sync::mpsc::{self, Receiver, UnboundedSender};
 
+#[derive(Debug)]
 pub enum BackendCommand {
     FetchStatus,
     SetVolume(Volume),
+    Play,
+    Pause,
 }
 
 #[derive(Clone, Debug)]
@@ -63,6 +67,17 @@ impl Pl4yrsClient {
     ) -> Result<(), mpsc::error::TrySendError<BackendCommand>> {
         self.command_tx.try_send(command)
     }
+
+    #[cfg(test)]
+    pub fn for_test() -> (Self, mpsc::Receiver<BackendCommand>) {
+        let (command_tx, command_rx) = mpsc::channel(16);
+        let client = Self {
+            command_tx,
+            command_task: tokio::spawn(async {}),
+            sse_task: tokio::spawn(async {}),
+        };
+        (client, command_rx)
+    }
 }
 
 async fn run_command_worker(
@@ -85,6 +100,22 @@ async fn run_command_worker(
             }
             BackendCommand::SetVolume(volume) => {
                 if let Err(error) = set_volume(&http, &base_url, volume).await {
+                    let event = BackendEvent::RequestFailed(error.to_string());
+                    if event_tx.send(Event::Backend(event)).is_err() {
+                        break;
+                    }
+                }
+            }
+            BackendCommand::Play => {
+                if let Err(error) = play(&http, &base_url).await {
+                    let event = BackendEvent::RequestFailed(error.to_string());
+                    if event_tx.send(Event::Backend(event)).is_err() {
+                        break;
+                    }
+                }
+            }
+            BackendCommand::Pause => {
+                if let Err(error) = pause(&http, &base_url).await {
                     let event = BackendEvent::RequestFailed(error.to_string());
                     if event_tx.send(Event::Backend(event)).is_err() {
                         break;
@@ -203,13 +234,9 @@ async fn receive_status_events(
 }
 
 pub async fn fetch_status(http: &reqwest::Client, base_url: &reqwest::Url) -> Result<PlayerStatus> {
-    let url = base_url.join("/status")?;
-
-    Ok(http
-        .get(url)
-        .send()
+    let response = http.get(base_url.join("/status")?).send().await?;
+    Ok(check_response(response)
         .await?
-        .error_for_status()?
         .json::<PlayerStatus>()
         .await?)
 }
@@ -219,15 +246,47 @@ pub async fn set_volume(
     base_url: &reqwest::Url,
     volume: Volume,
 ) -> Result<()> {
-    let url = base_url.join("/volume")?;
-
-    http.post(url)
+    let response = http
+        .post(base_url.join("/volume")?)
         .json(&SetVolume { volume })
         .send()
-        .await?
-        .error_for_status()?;
+        .await?;
 
+    check_response(response).await?;
     Ok(())
+}
+
+async fn check_response(response: reqwest::Response) -> Result<reqwest::Response> {
+    let status = response.status();
+    if status.is_success() {
+        return Ok(response);
+    }
+
+    match response.json::<ApiError>().await {
+        Ok(error) => {
+            let details = error
+                .details
+                .filter(|value| !value.is_empty())
+                .map(|value| format!(": {value}"))
+                .unwrap_or_default();
+
+            anyhow::bail!("{}{}", error.message, details);
+        }
+        Err(_) => anyhow::bail!("request failed with {status}"),
+    }
+}
+
+async fn send_action(http: &reqwest::Client, url: reqwest::Url) -> Result<()> {
+    check_response(http.post(url).send().await?).await?;
+    Ok(())
+}
+
+pub async fn play(http: &reqwest::Client, base_url: &reqwest::Url) -> Result<()> {
+    send_action(http, base_url.join("/play")?).await
+}
+
+pub async fn pause(http: &reqwest::Client, base_url: &reqwest::Url) -> Result<()> {
+    send_action(http, base_url.join("/pause")?).await
 }
 
 impl Drop for Pl4yrsClient {

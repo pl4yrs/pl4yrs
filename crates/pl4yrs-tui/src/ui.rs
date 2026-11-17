@@ -54,7 +54,9 @@ impl Widget for &App {
         ])
         .areas(player_column);
 
-        PlayerStatusWidget::new(self.status.as_ref()).render(player_panel, buf);
+        PlayerStatusWidget::new(self.status.as_ref())
+            .pending(self.pending_playback.as_ref())
+            .render(player_panel, buf);
 
         FooterWidget::new(
             self.connection_status.as_ref(),

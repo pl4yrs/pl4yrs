@@ -4,83 +4,64 @@ use axum::{
     http::StatusCode,
     response::{IntoResponse, Json, Response},
 };
-use serde::Serialize;
 
-#[derive(Debug, Clone, Copy, Serialize)]
-#[serde(rename_all = "SCREAMING_SNAKE_CASE")]
-pub enum ApiErrorCode {
-    SendspinUnavailable,
-    SendspinIoError,
-    SendspinBadResponse,
-    SendspinConfigError,
-    SendspinConfigInvalid,
-    SendspinCommandFailure,
-    InvalidRequest,
-    UnsupportedMediaType,
-    UnprocessableEntity,
-}
+use pl4yrs_api::error::{ApiError, ApiErrorCode};
 
-impl ApiErrorCode {
-    fn status(self) -> StatusCode {
-        match self {
-            Self::InvalidRequest => StatusCode::BAD_REQUEST,
-            Self::UnsupportedMediaType => StatusCode::UNSUPPORTED_MEDIA_TYPE,
-            Self::UnprocessableEntity => StatusCode::UNPROCESSABLE_ENTITY,
-            _ => StatusCode::BAD_GATEWAY,
-        }
-    }
-}
+#[derive(Debug)]
+pub struct ApiResponseError(ApiError);
 
-#[derive(Debug, Serialize)]
-pub struct ApiError {
-    pub code: ApiErrorCode,
-    pub message: String,
-    pub details: Option<String>,
-}
-
-impl ApiError {
+impl ApiResponseError {
     pub fn new(code: ApiErrorCode, message: &str) -> Self {
-        Self {
-            code,
-            message: message.to_string(),
-            details: None,
-        }
+        Self(ApiError::new(code, message))
     }
 
     pub fn with_details(mut self, details: &str) -> Self {
-        self.details = Some(details.to_string());
+        self.0 = self.0.with_details(details);
         self
     }
 }
 
-impl From<&SendSpinError> for ApiError {
+impl IntoResponse for ApiResponseError {
+    fn into_response(self) -> Response {
+        let status = match self.0.code {
+            ApiErrorCode::InvalidRequest => StatusCode::BAD_REQUEST,
+            ApiErrorCode::UnsupportedMediaType => StatusCode::UNSUPPORTED_MEDIA_TYPE,
+            ApiErrorCode::UnprocessableEntity => StatusCode::UNPROCESSABLE_ENTITY,
+            _ => StatusCode::BAD_GATEWAY,
+        };
+
+        (status, Json(self.0)).into_response()
+    }
+}
+
+impl From<&SendSpinError> for ApiResponseError {
     fn from(e: &SendSpinError) -> Self {
         match e {
-            SendSpinError::Connect(io) => ApiError::new(
+            SendSpinError::Connect(io) => ApiResponseError::new(
                 ApiErrorCode::SendspinUnavailable,
                 "cannot reach sendspin daemon",
             )
             .with_details(&io.to_string()),
-            SendSpinError::Io(io) => ApiError::new(
+            SendSpinError::Io(io) => ApiResponseError::new(
                 ApiErrorCode::SendspinIoError,
                 "error communicating with sendspin",
             )
             .with_details(&io.to_string()),
-            SendSpinError::MalformedResponse => ApiError::new(
+            SendSpinError::MalformedResponse => ApiResponseError::new(
                 ApiErrorCode::SendspinBadResponse,
                 "unexpected response from sendspin",
             ),
-            SendSpinError::ConfigAccess(io) => ApiError::new(
+            SendSpinError::ConfigAccess(io) => ApiResponseError::new(
                 ApiErrorCode::SendspinConfigError,
                 "error accessing sendspin config",
             )
             .with_details(&io.to_string()),
-            SendSpinError::ConfigInvalid(token) => ApiError::new(
+            SendSpinError::ConfigInvalid(token) => ApiResponseError::new(
                 ApiErrorCode::SendspinConfigInvalid,
                 "invalid sendspin configuration",
             )
             .with_details(&token.to_string()),
-            SendSpinError::CommandFailed => ApiError::new(
+            SendSpinError::CommandFailed => ApiResponseError::new(
                 ApiErrorCode::SendspinCommandFailure,
                 "sendspin command failed",
             ),
@@ -88,19 +69,13 @@ impl From<&SendSpinError> for ApiError {
     }
 }
 
-impl From<JsonRejection> for ApiError {
+impl From<JsonRejection> for ApiResponseError {
     fn from(rejection: JsonRejection) -> Self {
         let code = match &rejection {
             JsonRejection::MissingJsonContentType(_) => ApiErrorCode::UnsupportedMediaType,
             JsonRejection::JsonDataError(_) => ApiErrorCode::UnprocessableEntity,
             _ => ApiErrorCode::InvalidRequest,
         };
-        ApiError::new(code, "invalid request body").with_details(&rejection.body_text())
-    }
-}
-
-impl IntoResponse for ApiError {
-    fn into_response(self) -> Response {
-        (self.code.status(), Json(self)).into_response()
+        ApiResponseError::new(code, "invalid request body").with_details(&rejection.body_text())
     }
 }
