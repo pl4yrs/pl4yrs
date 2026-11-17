@@ -446,4 +446,66 @@ mod tests {
             );
         }
     }
+
+    #[test]
+    fn state_parses_known_values() {
+        assert_eq!(
+            SendSpinService::parse_state("playing"),
+            PlaybackState::Playing
+        );
+        assert_eq!(
+            SendSpinService::parse_state("paused"),
+            PlaybackState::Paused
+        );
+        assert_eq!(
+            SendSpinService::parse_state("stopped"),
+            PlaybackState::Stopped
+        );
+    }
+
+    #[test]
+    fn state_defaults_to_unknown() {
+        for input in ["buffering", "", "PLAYING", "idle", "IDontKnowWhatImDoing"] {
+            assert_eq!(
+                SendSpinService::parse_state(input),
+                PlaybackState::Unknown,
+                "input: {input:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn clock_parses_ss_mm_ss_hh_mm_ss() {
+        assert_eq!(
+            SendSpinService::parse_clock("42"),
+            Some(Duration::from_secs(42))
+        );
+        assert_eq!(
+            SendSpinService::parse_clock("2:42"),
+            Some(Duration::from_secs(162))
+        );
+        assert_eq!(
+            SendSpinService::parse_clock("1:05:42"),
+            Some(Duration::from_secs(3942))
+        );
+    }
+
+    #[test]
+    fn clock_trims_whitespaces() {
+        assert_eq!(
+            SendSpinService::parse_clock("  42  "),
+            Some(Duration::from_secs(42))
+        );
+    }
+
+    #[test]
+    fn clock_rejects_too_invalid_strings() {
+        for input in ["1:02:03:09", "abc", "12:xa", "-2"] {
+            assert_eq!(
+                SendSpinService::parse_clock(input),
+                None,
+                "input: {input:?}"
+            );
+        }
+    }
 }
