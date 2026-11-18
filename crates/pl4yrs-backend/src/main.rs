@@ -1,5 +1,7 @@
 mod api;
 mod services;
+#[cfg(test)]
+mod test_support;
 
 use crate::api::state;
 use anyhow::{Context, Result};

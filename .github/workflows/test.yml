@@ -27,5 +27,16 @@ jobs:
         run: cargo clippy -- -D warnings
       - name: Build
         run: cargo build --verbose
-      - name: Run tests
-        run: cargo test --verbose
+      - name: Install cargo-llvm-cov
+        uses: taiki-e/install-action@ab49d3c64680143e184118bed66a46419fc15519 # v2.90.5
+        with:
+          tool: cargo-llvm-cov
+      - name: Run tests and generate coverage
+        run: cargo llvm-cov --workspace --exclude pl4yrsd --lcov --output-path lcov.info --ignore-filename-regex test_support.rs
+      - name: Print coverage report
+        run: cargo llvm-cov report -p pl4yrs-api -p pl4yrs-backend -p pl4yrs-tui --ignore-filename-regex test_support.rs
+      - name: Upload to Coveralls
+        uses: coverallsapp/github-action@8d6379e14d29928660c4ba802d8e85393440b329 # v2.3.8
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          file: lcov.info

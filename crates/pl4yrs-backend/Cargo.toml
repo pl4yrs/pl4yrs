@@ -18,3 +18,8 @@ tracing = { version = "0.1.44", features = ["valuable"] }
 tracing-subscriber = { version = "0.3.23", features = ["env-filter", "fmt"] }
 valuable = { version = "0.1.1", features = ["derive"] }
 pl4yrs-api = { workspace = true }
+
+[dev-dependencies]
+tempfile = "3.27.0"
+tower = { version = "0.5.3", features = ["util"] }
+http-body-util = "0.1.5"

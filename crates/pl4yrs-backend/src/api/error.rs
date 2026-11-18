@@ -79,3 +79,99 @@ impl From<JsonRejection> for ApiResponseError {
         ApiResponseError::new(code, "invalid request body").with_details(&rejection.body_text())
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use axum::body::to_bytes;
+
+    use super::*;
+    use crate::services::sendspin::SendSpinError;
+
+    #[test]
+    fn sendspin_errors_map_to_codes() {
+        use std::io;
+
+        let cases: Vec<(SendSpinError, ApiErrorCode, &str, bool)> = vec![
+            (
+                SendSpinError::Connect(io::Error::new(io::ErrorKind::NotFound, "nope")),
+                ApiErrorCode::SendspinUnavailable,
+                "cannot reach sendspin daemon",
+                true,
+            ),
+            (
+                SendSpinError::Io(io::Error::new(io::ErrorKind::BrokenPipe, "pipe")),
+                ApiErrorCode::SendspinIoError,
+                "error communicating with sendspin",
+                true,
+            ),
+            (
+                SendSpinError::MalformedResponse,
+                ApiErrorCode::SendspinBadResponse,
+                "unexpected response from sendspin",
+                false,
+            ),
+            (
+                SendSpinError::ConfigAccess(io::Error::new(
+                    io::ErrorKind::PermissionDenied,
+                    "denied",
+                )),
+                ApiErrorCode::SendspinConfigError,
+                "error accessing sendspin config",
+                true,
+            ),
+            (
+                SendSpinError::ConfigInvalid("port".into()),
+                ApiErrorCode::SendspinConfigInvalid,
+                "invalid sendspin configuration",
+                true,
+            ),
+            (
+                SendSpinError::CommandFailed,
+                ApiErrorCode::SendspinCommandFailure,
+                "sendspin command failed",
+                false,
+            ),
+        ];
+
+        for (err, expected_code, expected_msg, expect_details) in cases {
+            let api_err = ApiResponseError::from(&err).0;
+            assert_eq!(api_err.code, expected_code);
+            assert_eq!(api_err.message, expected_msg);
+            assert_eq!(api_err.details.is_some(), expect_details);
+        }
+    }
+
+    #[tokio::test]
+    async fn into_response_maps_status_and_body() {
+        let err = ApiResponseError::new(
+            ApiErrorCode::SendspinUnavailable,
+            "cannot reach sendspin daemon",
+        );
+        let response = err.into_response();
+
+        assert_eq!(response.status(), StatusCode::BAD_GATEWAY);
+
+        let body = to_bytes(response.into_body(), usize::MAX).await.unwrap();
+        let json: serde_json::Value = serde_json::from_slice(&body).unwrap();
+        assert_eq!(json["code"], "SENDSPIN_UNAVAILABLE");
+        assert_eq!(json["message"], "cannot reach sendspin daemon");
+    }
+
+    #[tokio::test]
+    async fn into_response_maps_4xx_codes() {
+        for (code, expected) in [
+            (ApiErrorCode::InvalidRequest, StatusCode::BAD_REQUEST),
+            (
+                ApiErrorCode::UnsupportedMediaType,
+                StatusCode::UNSUPPORTED_MEDIA_TYPE,
+            ),
+            (
+                ApiErrorCode::UnprocessableEntity,
+                StatusCode::UNPROCESSABLE_ENTITY,
+            ),
+        ] {
+            let response = ApiResponseError::new(code, "ignore me").into_response();
+            assert_eq!(response.status(), expected);
+        }
+    }
+}

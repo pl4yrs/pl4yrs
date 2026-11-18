@@ -173,9 +173,7 @@ impl SendSpinService {
             self.config_file.to_string_lossy()
         );
 
-        let lines = Self::read_lines(&self.config_file)
-            .map_err(SendSpinError::ConfigAccess)
-            .unwrap();
+        let lines = Self::read_lines(&self.config_file).map_err(SendSpinError::ConfigAccess)?;
 
         for line in lines
             .map_while(Result::ok)
@@ -184,20 +182,20 @@ impl SendSpinService {
             debug!(line = line, "processing config line");
             if let Some((key, value)) = line.split_once("=") {
                 match key.trim() {
-                    "name" => config.name = value.to_string(),
-                    "manufacturer" => config.manufacturer = value.to_string(),
-                    "product_name" => config.product_name = value.to_string(),
-                    "output" => config.output = value.to_string(),
-                    "input" => config.input = value.to_string(),
+                    "name" => config.name = value.trim().to_string(),
+                    "manufacturer" => config.manufacturer = value.trim().to_string(),
+                    "product-name" => config.product_name = value.trim().to_string(),
+                    "output" => config.output = value.trim().to_string(),
+                    "input" => config.input = value.trim().to_string(),
                     "buffer-ms" => config.buffer_ms = value.trim().parse().unwrap(), // XXX should we return SendSpinError::ConfigInvalid(line))?
-                    "audio-format" => config.audio_format = value.to_string(),
+                    "audio-format" => config.audio_format = value.trim().to_string(),
                     "port" => config.port = value.trim().parse().unwrap(),
-                    "server" => config.server = value.to_string(),
+                    "server" => config.server = value.trim().to_string(),
                     "output-delay" => config.output_delay = value.trim().parse().unwrap(),
                     "allow-unpaired" => config.allow_unpaired = Self::parse_optional_bool(value),
                     "fixed-volume" => config.fixed_volume = Self::parse_optional_bool(value),
-                    "log-level" => config.log_level = value.to_string(),
-                    "control-socket" => config.control_socket = value.to_string(),
+                    "log-level" => config.log_level = value.trim().to_string(),
+                    "control-socket" => config.control_socket = value.trim().to_string(),
                     _ => {
                         error!("Unknown value: {}", key.trim());
                         return Err(SendSpinError::ConfigInvalid(line));
@@ -279,7 +277,7 @@ impl SendSpinService {
         let position = Self::parse_clock(pos)?;
         let duration = match dur {
             "unknown" => None,
-            d => Self::parse_clock(d).filter(|d| !d.is_zero()),
+            d => Some(Self::parse_clock(d)?).filter(|d| !d.is_zero()),
         };
         Some((position, duration, estimated))
     }
@@ -319,7 +317,7 @@ impl SendSpinService {
     }
 
     fn parse_optional_bool(value: &str) -> Option<bool> {
-        match value {
+        match value.trim() {
             "true" => Some(true),
             "false" => Some(false),
             _ => None,
@@ -374,7 +372,7 @@ impl Default for SendSpinConfig {
     fn default() -> Self {
         Self {
             name: "playrs".to_string(),
-            manufacturer: "senspin-cpp-cli".to_string(),
+            manufacturer: "sendspin-cpp-cli".to_string(),
             product_name: "sendspin-cli".to_string(),
             output: String::new(),
             input: String::new(),
@@ -445,5 +443,270 @@ mod tests {
                 "input: {input:?}"
             );
         }
+    }
+
+    #[test]
+    fn state_parses_known_values() {
+        assert_eq!(
+            SendSpinService::parse_state("playing"),
+            PlaybackState::Playing
+        );
+        assert_eq!(
+            SendSpinService::parse_state("paused"),
+            PlaybackState::Paused
+        );
+        assert_eq!(
+            SendSpinService::parse_state("stopped"),
+            PlaybackState::Stopped
+        );
+    }
+
+    #[test]
+    fn state_defaults_to_unknown() {
+        for input in ["buffering", "", "PLAYING", "idle", "IDontKnowWhatImDoing"] {
+            assert_eq!(
+                SendSpinService::parse_state(input),
+                PlaybackState::Unknown,
+                "input: {input:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn clock_parses_ss_mm_ss_hh_mm_ss() {
+        assert_eq!(
+            SendSpinService::parse_clock("42"),
+            Some(Duration::from_secs(42))
+        );
+        assert_eq!(
+            SendSpinService::parse_clock("2:42"),
+            Some(Duration::from_secs(162))
+        );
+        assert_eq!(
+            SendSpinService::parse_clock("1:05:42"),
+            Some(Duration::from_secs(3942))
+        );
+    }
+
+    #[test]
+    fn clock_trims_whitespaces() {
+        assert_eq!(
+            SendSpinService::parse_clock("  42  "),
+            Some(Duration::from_secs(42))
+        );
+    }
+
+    #[test]
+    fn clock_rejects_too_invalid_strings() {
+        for input in ["1:02:03:09", "abc", "12:xa", "-2"] {
+            assert_eq!(
+                SendSpinService::parse_clock(input),
+                None,
+                "input: {input:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn position_parses_position_and_duration() {
+        let (pos, dur, est) = SendSpinService::parse_optional_position("1:23 / 4:42").unwrap();
+        assert_eq!(pos, Duration::from_secs(83));
+        assert_eq!(dur, Some(Duration::from_secs(282)));
+        assert!(!est);
+    }
+
+    #[test]
+    fn position_parses_estimated_suffix() {
+        let (_pos, _dur, est) =
+            SendSpinService::parse_optional_position("1:23 / 4:42 (estimated)").unwrap();
+        assert!(est);
+    }
+
+    #[test]
+    fn position_unknown_duration_is_none() {
+        let (pos, dur, _) = SendSpinService::parse_optional_position("1:23 / unknown").unwrap();
+        assert_eq!(pos, Duration::from_secs(83));
+        assert_eq!(dur, None);
+    }
+
+    #[test]
+    fn position_zero_duration_is_none() {
+        let (pos, dur, _) = SendSpinService::parse_optional_position("1:23 / 0:00").unwrap();
+        assert_eq!(pos, Duration::from_secs(83));
+        assert_eq!(dur, None);
+    }
+
+    #[test]
+    fn position_rejects_invalid_strings() {
+        for input in ["1:23", "abc / 1:42", "1:23 / xa", ""] {
+            assert_eq!(
+                SendSpinService::parse_optional_position(input),
+                None,
+                "input: {input:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn toggle_parses_on_off_unknown() {
+        assert_eq!(SendSpinService::parse_optional_toggle("on"), Some(true));
+        assert_eq!(SendSpinService::parse_optional_toggle("off"), Some(false));
+        assert_eq!(SendSpinService::parse_optional_toggle("unknown"), None);
+        assert_eq!(SendSpinService::parse_optional_toggle("yes"), None);
+    }
+
+    #[test]
+    fn optional_u8_parses_number_rejects_garbage() {
+        assert_eq!(SendSpinService::parse_optional_u8("42"), Some(42));
+        assert_eq!(SendSpinService::parse_optional_u8("300"), None);
+        assert_eq!(SendSpinService::parse_optional_u8("unknown"), None);
+        assert_eq!(SendSpinService::parse_optional_u8("xyz"), None);
+    }
+
+    #[test]
+    fn optional_bool_parses_true_false() {
+        assert_eq!(SendSpinService::parse_optional_bool("true"), Some(true));
+        assert_eq!(SendSpinService::parse_optional_bool("false"), Some(false));
+        assert_eq!(SendSpinService::parse_optional_bool("yes"), None);
+    }
+
+    #[test]
+    fn volume_takes_first_token_defaults_zero() {
+        assert_eq!(SendSpinService::parse_volume("42 something"), 42);
+        assert_eq!(SendSpinService::parse_volume("43"), 43);
+        assert_eq!(SendSpinService::parse_volume("fgh "), 0);
+        assert_eq!(SendSpinService::parse_volume("    "), 0);
+        assert_eq!(SendSpinService::parse_volume(""), 0);
+    }
+
+    #[test]
+    fn delay_strips_ms_defaults_zero() {
+        assert_eq!(SendSpinService::parse_delay("42 ms"), 42);
+        assert_eq!(SendSpinService::parse_delay("314"), 314);
+        assert_eq!(SendSpinService::parse_delay("fgh "), 0);
+        assert_eq!(SendSpinService::parse_delay("    "), 0);
+        assert_eq!(SendSpinService::parse_delay(""), 0);
+    }
+
+    #[test]
+    fn status_response_parses_all_fields() {
+        let response = "\
+name: Upper Toilet
+client id: pl4yrs-something
+server: Music Assistant (ma.local)
+trust: full
+pairing: paired
+state: playing
+stream: flac
+track: No Stairway to Heaven
+position: 1:23 / 42:18 (estimated)
+group volume: 42
+repeat: on
+shuffle: unknown
+player volume: 65 fixed
+output: plughw:CARD=DigiAMP,DEV=0
+output delay: 50 ms
+note: one coffee please!";
+        let status = SendSpinService::parse_status_response(response).unwrap();
+
+        assert_eq!(status.name, "Upper Toilet");
+        assert_eq!(status.client_id, "pl4yrs-something");
+        assert_eq!(status.server, "Music Assistant (ma.local)");
+        assert_eq!(status.trust, "full");
+        assert_eq!(status.pairing, "paired");
+        assert_eq!(status.state, PlaybackState::Playing);
+        assert_eq!(status.stream, "flac");
+        assert_eq!(status.track, "No Stairway to Heaven");
+
+        let position = status.position.unwrap();
+        assert_eq!(position.position, Duration::from_secs(83));
+        assert_eq!(position.duration, Some(Duration::from_secs(2538)));
+        assert!(position.estimated);
+
+        assert_eq!(status.group_volume, Some(42));
+        assert_eq!(status.repeat, Some(true));
+        assert_eq!(status.shuffle, None);
+        assert_eq!(status.player_volume, 65);
+        assert_eq!(status.output, "plughw:CARD=DigiAMP,DEV=0");
+        assert_eq!(status.output_delay_ms, 50);
+        assert_eq!(status.note, "one coffee please!");
+    }
+
+    #[test]
+    fn status_response_unknown_key_is_malformed() {
+        let err = SendSpinService::parse_status_response("garbage key: some value").unwrap_err();
+        assert!(matches!(err, SendSpinError::MalformedResponse));
+    }
+
+    #[test]
+    fn status_response_skips_lines_missing_colon() {
+        let status = SendSpinService::parse_status_response(
+            "name: pl4yrs\ngarbage line without separator\n",
+        )
+        .unwrap();
+        assert_eq!(status.name, "pl4yrs");
+    }
+
+    #[test]
+    fn status_response_empty_input_returns_defaul() {
+        let status = SendSpinService::parse_status_response("").unwrap();
+        assert_eq!(status, SendSpinStatus::default());
+    }
+
+    #[tokio::test]
+    async fn config_parses_known_keys_skips_comments() {
+        let conf = "\
+# initial comment
+name = testplayer
+output = sysdefault
+buffer-ms = 200
+audio-format = pcm:48000:24:2
+port = 9000
+# middle comment
+server = ma.local
+output-delay = 10
+allow-unpaired = true
+fixed-volume = false
+log-level = debug
+control-socket = /tmp/control.sock
+manufacturer = sendspin-cpp-cli
+product-name = sendspin-cpp
+
+# trailing comment
+";
+        let file = tempfile::NamedTempFile::new().unwrap();
+        std::fs::write(file.path(), conf).unwrap();
+
+        let service = SendSpinService::new(
+            PathBuf::from("/tmp/not-a-real.sock"),
+            file.path().to_path_buf(),
+        );
+        let config = service.get_config().await.unwrap();
+
+        assert_eq!(config.name, "testplayer");
+        assert_eq!(config.output, "sysdefault");
+        assert_eq!(config.buffer_ms, 200);
+        assert_eq!(config.port, 9000);
+        assert_eq!(config.server, "ma.local");
+        assert_eq!(config.output_delay, 10);
+        assert_eq!(config.allow_unpaired, Some(true));
+        assert_eq!(config.fixed_volume, Some(false));
+        assert_eq!(config.log_level, "debug");
+        assert_eq!(config.control_socket, "/tmp/control.sock");
+        assert_eq!(config.manufacturer, "sendspin-cpp-cli");
+        assert_eq!(config.product_name, "sendspin-cpp");
+    }
+
+    #[tokio::test]
+    async fn config_rejects_unknown_key() {
+        let file = tempfile::NamedTempFile::new().unwrap();
+        std::fs::write(file.path(), "garbage-dump = 1\n").unwrap();
+
+        let service = SendSpinService::new(
+            PathBuf::from("/tmp/not-a-real.sock"),
+            file.path().to_path_buf(),
+        );
+        let config = service.get_config().await;
+        assert!(matches!(config, Err(SendSpinError::ConfigInvalid(_))));
     }
 }
