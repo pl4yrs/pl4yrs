@@ -173,9 +173,7 @@ impl SendSpinService {
             self.config_file.to_string_lossy()
         );
 
-        let lines = Self::read_lines(&self.config_file)
-            .map_err(SendSpinError::ConfigAccess)
-            .unwrap();
+        let lines = Self::read_lines(&self.config_file).map_err(SendSpinError::ConfigAccess)?;
 
         for line in lines
             .map_while(Result::ok)
