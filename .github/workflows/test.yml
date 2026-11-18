@@ -32,9 +32,9 @@ jobs:
         with:
           tool: cargo-llvm-cov
       - name: Run tests and generate coverage
-        run: cargo llvm-cov --workspace --exclude pl4yrsd --lcov --output-path lcov.info
+        run: cargo llvm-cov --workspace --exclude pl4yrsd --lcov --output-path lcov.info --ignore-filename-regex test_support.rs
       - name: Print coverage report
-        run: cargo llvm-cov report -p pl4yrs-api -p pl4yrs-backend -p pl4yrs-tui
+        run: cargo llvm-cov report -p pl4yrs-api -p pl4yrs-backend -p pl4yrs-tui --ignore-filename-regex test_support.rs
       - name: Upload to Coveralls
         uses: coverallsapp/github-action@8d6379e14d29928660c4ba802d8e85393440b329 # v2.3.8
         with:
