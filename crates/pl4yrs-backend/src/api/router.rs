@@ -23,13 +23,16 @@ mod tests {
     use crate::test_support::{default_handler, mock_sendspin};
     use axum::{
         body::{Body, to_bytes},
+        extract::State,
         http::{Request, StatusCode},
     };
+    use http_body_util::BodyExt;
     use pl4yrs_api::{
         error::{ApiError, ApiErrorCode},
         playback::{PlayerState, PlayerStatus},
     };
     use serde_json::{Value, json};
+    use std::time::Duration;
     use tower::ServiceExt;
 
     fn app_state(dir: &tempfile::TempDir) -> state::AppState {
@@ -203,5 +206,64 @@ mod tests {
         assert_eq!(config["name"], "testplayer");
         assert_eq!(config["output"], "sysdefault");
         assert_eq!(config["buffer_ms"], 200);
+    }
+
+    async fn next_sse_status(body: &mut Body) -> PlayerStatus {
+        tokio::time::timeout(Duration::from_secs(1), async {
+            let mut bytes = Vec::new();
+
+            loop {
+                let frame = body
+                    .frame()
+                    .await
+                    .expect("SSE stream ended before emitting a status")
+                    .expect("failed to read SSE frame");
+
+                if let Ok(data) = frame.into_data() {
+                    bytes.extend_from_slice(&data);
+                }
+
+                if bytes.ends_with(b"\n\n") {
+                    let event = std::str::from_utf8(&bytes).unwrap();
+                    let data = event
+                        .lines()
+                        .find_map(|line| line.strip_prefix("data:"))
+                        .expect("SSE event contained no data field");
+
+                    return serde_json::from_str(data.trim_start())
+                        .expect("SSE data was not a valid PlayerStatus");
+                }
+            }
+        })
+        .await
+        .expect("SSE status event was not emitted")
+    }
+
+    #[tokio::test]
+    async fn status_events_route_emits_initial_status_and_command_refresh() {
+        let dir = tempfile::tempdir().unwrap();
+        let socket = mock_sendspin(&dir, default_handler);
+        let app_state = state::AppState::new(socket, dir.path().join("unused.conf"));
+
+        let app = get_router(app_state.clone());
+
+        let response = app
+            .oneshot(Request::get("/status/events").body(Body::empty()).unwrap())
+            .await
+            .unwrap();
+
+        assert_eq!(response.status(), StatusCode::OK);
+        assert_eq!(response.headers()["content-type"], "text/event-stream");
+
+        let mut body = response.into_body();
+
+        let initial = next_sse_status(&mut body).await;
+        assert_eq!(initial.state, PlayerState::Unknown);
+
+        handlers::play(State(app_state)).await.unwrap();
+
+        let updated = next_sse_status(&mut body).await;
+        assert_eq!(updated.state, PlayerState::Playing);
+        assert_eq!(updated.media.unwrap().title, "No Stairway to Heaven");
     }
 }
