@@ -21,12 +21,17 @@ pub struct SendSpinStatus {
     pub client_id: String,
     pub server: String,
     pub trust: String,
+    pub paired_servers: Option<u8>,
     pub pairing: String,
+    pub pairing_code: String,
+    pub last_pairing: String,
     pub state: PlaybackState,
     pub stream: String,
+    pub codec: String,
     pub track: String,
     pub position: Option<Position>,
     pub group_volume: Option<u8>,
+    pub group: String,
     pub repeat: Option<bool>,
     pub shuffle: Option<bool>,
     pub player_volume: u8,
@@ -218,9 +223,13 @@ impl SendSpinService {
                     "client id" => status.client_id = value.to_string(),
                     "server" => status.server = value.to_string(),
                     "trust" => status.trust = value.to_string(),
+                    "paired servers" => status.paired_servers = Self::parse_optional_u8(value),
                     "pairing" => status.pairing = value.to_string(),
+                    "pairing code" => status.pairing_code = value.to_string(),
+                    "last pairing" => status.last_pairing = value.to_string(),
                     "state" => status.state = Self::parse_state(value),
                     "stream" => status.stream = value.to_string(),
+                    "codec" => status.codec = value.to_string(),
                     "track" => status.track = value.to_string(),
                     "position" => {
                         status.position = Self::parse_optional_position(value).map(
@@ -232,6 +241,7 @@ impl SendSpinService {
                         )
                     }
                     "group volume" => status.group_volume = Self::parse_optional_u8(value),
+                    "group" => status.group = value.to_string(),
                     "repeat" => status.repeat = Self::parse_optional_toggle(value),
                     "shuffle" => status.shuffle = Self::parse_optional_toggle(value),
                     "player volume" => status.player_volume = Self::parse_volume(value),
@@ -353,11 +363,16 @@ impl Default for SendSpinStatus {
             server: String::new(),
             trust: String::new(),
             pairing: String::new(),
+            paired_servers: None,
+            pairing_code: String::new(),
+            last_pairing: String::new(),
             state: PlaybackState::Unknown,
             stream: String::new(),
+            codec: String::new(),
             track: String::new(),
             position: None,
             group_volume: None,
+            group: String::new(),
             repeat: None,
             shuffle: None,
             player_volume: 0,
@@ -595,12 +610,17 @@ name: Upper Toilet
 client id: pl4yrs-something
 server: Music Assistant (ma.local)
 trust: full
+paired servers: 2
 pairing: paired
+pairing code: 000-333
+last pairing: Oddity
 state: playing
-stream: flac
+stream: receiving
+codec: FLAC
 track: No Stairway to Heaven
 position: 1:23 / 42:18 (estimated)
 group volume: 42
+group: All Rooms
 repeat: on
 shuffle: unknown
 player volume: 65 fixed
@@ -613,9 +633,12 @@ note: one coffee please!";
         assert_eq!(status.client_id, "pl4yrs-something");
         assert_eq!(status.server, "Music Assistant (ma.local)");
         assert_eq!(status.trust, "full");
+        assert_eq!(status.paired_servers, Some(2));
         assert_eq!(status.pairing, "paired");
+        assert_eq!(status.pairing_code, "000-333");
         assert_eq!(status.state, PlaybackState::Playing);
-        assert_eq!(status.stream, "flac");
+        assert_eq!(status.stream, "receiving");
+        assert_eq!(status.codec, "FLAC");
         assert_eq!(status.track, "No Stairway to Heaven");
 
         let position = status.position.unwrap();
@@ -624,6 +647,7 @@ note: one coffee please!";
         assert!(position.estimated);
 
         assert_eq!(status.group_volume, Some(42));
+        assert_eq!(status.group, "All Rooms");
         assert_eq!(status.repeat, Some(true));
         assert_eq!(status.shuffle, None);
         assert_eq!(status.player_volume, 65);
