@@ -1,0 +1,16 @@
+#!/bin/sh
+set -e
+
+case "$1" in
+    configure)
+        # Create the pl4yrs user if missing
+        if ! getent passwd pl4yrs >/dev/null 2>&1; then
+            useradd --system --groups audio --shell /usr/sbin/nologin \
+                --comment "pl4yrs service account" pl4yrs 2>/dev/null || true
+        fi
+        ;;
+esac
+
+#DEBHELPER#
+
+exit 0

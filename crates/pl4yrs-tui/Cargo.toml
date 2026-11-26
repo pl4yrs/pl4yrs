@@ -1,10 +1,16 @@
 [package]
 name = "pl4yrs-tui"
-version = "0.1.0"
+version.workspace = true
 description = "Pl4yrs TUI client"
 authors = ["Sergio Visinoni <piffio@piffio.org>"]
 license = "MIT"
 edition = "2024"
+
+[package.metadata.deb]
+maintainer = "Sergio Visinoni <piffio@piffio.org>"
+depends = "$auto"
+section = "sound"
+priority = "optional"
 
 [dependencies]
 clap = { version = "4.6.7", features = ["derive", "env", "help"] }

@@ -1,7 +1,21 @@
 [package]
 name = "pl4yrs-backend"
-version = "0.1.0"
+version.workspace = true
+description = "Pl4yrs backend and API service"
+authors = ["Sergio Visinoni <piffio@piffio.org>"]
+license = "MIT"
 edition = "2024"
+
+[package.metadata.deb]
+maintainer = "Sergio Visinoni <piffio@piffio.org>"
+depends = "$auto, sendspin-cli"
+section = "sound"
+priority = "optional"
+maintainer-scripts = "debian/"
+systemd-units = { enable = true, start = true, restart-after-upgrade = true }
+assets = [
+    ["target/release/pl4yrs-backend", "usr/bin/", "755"],
+]
 
 [dependencies]
 anyhow = "1.0.104"
