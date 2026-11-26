@@ -1,6 +1,6 @@
 [package]
 name = "pl4yrs-tui"
-version = "0.1.0"
+version.workspace = true
 description = "Pl4yrs TUI client"
 authors = ["Sergio Visinoni <piffio@piffio.org>"]
 license = "MIT"

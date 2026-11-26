@@ -1,6 +1,6 @@
 [package]
 name = "pl4yrs-backend"
-version = "0.1.0"
+version.workspace = true
 description = "Pl4yrs backend and API service"
 authors = ["Sergio Visinoni <piffio@piffio.org>"]
 license = "MIT"

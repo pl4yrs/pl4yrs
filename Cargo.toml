@@ -2,6 +2,9 @@
 resolver = "3"
 members = ["crates/*"]
 
+[workspace.package]
+version = "0.0.1"
+
 [workspace.dependencies]
 pl4yrs-api = { path = "crates/pl4yrs-api" }
 
