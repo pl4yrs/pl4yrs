@@ -6,6 +6,12 @@ authors = ["Sergio Visinoni <piffio@piffio.org>"]
 license = "MIT"
 edition = "2024"
 
+[package.metadata.deb]
+maintainer = "Sergio Visinoni <piffio@piffio.org>"
+depends = "$auto"
+section = "sound"
+priority = "optional"
+
 [dependencies]
 clap = { version = "4.6.7", features = ["derive", "env", "help"] }
 crossterm = { version = "0.29.0", features = ["event-stream"] }
