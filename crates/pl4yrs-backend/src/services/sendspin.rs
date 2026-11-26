@@ -610,12 +610,17 @@ name: Upper Toilet
 client id: pl4yrs-something
 server: Music Assistant (ma.local)
 trust: full
+paired servers: 2
 pairing: paired
+pairing code: 000-333
+last pairing: Oddity
 state: playing
-stream: flac
+stream: receiving
+codec: FLAC
 track: No Stairway to Heaven
 position: 1:23 / 42:18 (estimated)
 group volume: 42
+group: All Rooms
 repeat: on
 shuffle: unknown
 player volume: 65 fixed
@@ -628,9 +633,12 @@ note: one coffee please!";
         assert_eq!(status.client_id, "pl4yrs-something");
         assert_eq!(status.server, "Music Assistant (ma.local)");
         assert_eq!(status.trust, "full");
+        assert_eq!(status.paired_servers, Some(2));
         assert_eq!(status.pairing, "paired");
+        assert_eq!(status.pairing_code, "000-333");
         assert_eq!(status.state, PlaybackState::Playing);
-        assert_eq!(status.stream, "flac");
+        assert_eq!(status.stream, "receiving");
+        assert_eq!(status.codec, "FLAC");
         assert_eq!(status.track, "No Stairway to Heaven");
 
         let position = status.position.unwrap();
@@ -639,6 +647,7 @@ note: one coffee please!";
         assert!(position.estimated);
 
         assert_eq!(status.group_volume, Some(42));
+        assert_eq!(status.group, "All Rooms");
         assert_eq!(status.repeat, Some(true));
         assert_eq!(status.shuffle, None);
         assert_eq!(status.player_volume, 65);
