@@ -16,7 +16,7 @@ via [cargo-deb](https://github.com/kornelski/cargo-deb).
 
 ```bash
 scripts/build-deb.sh               # builds both packages
-scripts/build-deb.sh --debrev 1    # override tagged-release revision (default is 1+g<sha>)
+scripts/build-deb.sh --debrev 1    # override tagged-release revision (default is 1+<utc commit date>.g<sha>)
 ```
 
 On macOS the script builds the `pl4yrs-deb-builder` image (`packaging/Dockerfile`,

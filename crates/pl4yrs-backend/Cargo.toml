@@ -15,7 +15,6 @@ maintainer-scripts = "debian/"
 systemd-units = { enable = true, start = true, restart-after-upgrade = true }
 assets = [
     ["target/release/pl4yrs-backend", "usr/bin/", "755"],
-    ["debian/backend.env", "etc/pl4yrs/backend.env", "644"],
 ]
 
 [dependencies]

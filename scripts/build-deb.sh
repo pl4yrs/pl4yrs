@@ -9,7 +9,7 @@
 #   scripts/build-deb.sh [--debrev N] [PACKAGE ...]
 #
 # Packages default to "pl4yrs-backend pl4yrs-tui". The Debian revision defaults
-# to 1+g<short git sha>; pass --debrev 1 for a tagged release build.
+# to 1+<utc commit date>.g<short git sha>.
 set -euo pipefail
 
 REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
@@ -19,7 +19,7 @@ PACKAGES=(pl4yrs-backend pl4yrs-tui)
 usage() {
     echo -ne "Usage: \n"
     echo -ne "\t--help\t\t\tPrint help.\n"
-    echo -ne "\t--debrev N\t\tDebian revision (default: 1+g<short git sha>).\n"
+    echo -ne "\t--debrev N\t\tDebian revision (default: 1+<utc commit date>.g<short git sha>).\n"
     echo -ne "\tPACKAGE ...\t\tWorkspace packages to build (default: ${PACKAGES[*]}).\n\n"
 }
 
@@ -36,7 +36,9 @@ done
 [ "${#POSITIONAL[@]}" -gt 0 ] && PACKAGES=("${POSITIONAL[@]}")
 
 if [ -z "$DEBREV" ]; then
-    DEBREV="1+g$(git -C "$REPO_ROOT" rev-parse --short HEAD)"
+    CTS="$(git -C "$REPO_ROOT" show -s --format=%ct HEAD)"
+    STAMP="$(date -u -r "$CTS" +%Y%m%d%H%M%S 2>/dev/null || date -u -d "@$CTS" +%Y%m%d%H%M%S)"
+    DEBREV="1+${STAMP}.g$(git -C "$REPO_ROOT" rev-parse --short HEAD)"
 fi
 
 container_runtime() {
