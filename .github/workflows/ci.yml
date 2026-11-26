@@ -80,7 +80,7 @@ jobs:
           if-no-files-found: error
 
   release:
-    #if: github.ref_type == 'tag'
+    if: github.ref_type == 'tag'
     name: release
     runs-on: ubuntu-26.04-arm
     needs: [build-and-test, deb-arm64]
