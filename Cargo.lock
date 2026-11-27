@@ -2164,7 +2164,7 @@ checksum = "f6b464fbc74e149a392436b17d523f769e057cb6877f6a5c4618bc6f11800548"
 
 [[package]]
 name = "pl4yrs-api"
-version = "0.0.1"
+version = "0.0.2"
 dependencies = [
  "serde",
  "serde_json",
@@ -2172,7 +2172,7 @@ dependencies = [
 
 [[package]]
 name = "pl4yrs-backend"
-version = "0.0.1"
+version = "0.0.2"
 dependencies = [
  "anyhow",
  "async-stream",
@@ -2195,7 +2195,7 @@ dependencies = [
 
 [[package]]
 name = "pl4yrs-tui"
-version = "0.0.1"
+version = "0.0.2"
 dependencies = [
  "anyhow",
  "clap",
@@ -2212,7 +2212,7 @@ dependencies = [
 
 [[package]]
 name = "pl4yrsd"
-version = "0.0.1"
+version = "0.0.2"
 dependencies = [
  "anyhow",
  "axum",
